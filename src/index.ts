@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { basicAuth } from 'hono/basic-auth';
 import QRCode from 'qrcode';
 
-import type { Env, GenJob } from './types';
+import type { Env } from './types';
 import * as db from './db';
 import { describePainting } from './claude';
 import { processSubmission } from './pipeline';
@@ -10,6 +10,21 @@ import { bufferToBase64 } from './util';
 import { submitPage, confirmationPage, showPage, curatePage } from './views';
 
 const app = new Hono<{ Bindings: Env }>();
+
+/**
+ * Run the generation pipeline in the background (via ctx.waitUntil) after the
+ * visitor's request has already returned. No Queues needed — this keeps the app
+ * on the Workers free plan. On failure we mark the submission `rejected` so it
+ * never hangs in `generating` and stays visible on /curate.
+ */
+async function runGeneration(env: Env, submissionId: string): Promise<void> {
+  try {
+    await processSubmission(env, submissionId);
+  } catch (e) {
+    console.error('generation failed for', submissionId, e);
+    await db.setSubmissionStatus(env, submissionId, 'rejected', 'generation failed');
+  }
+}
 
 // ---- Auth on curator surfaces ----
 const gate = basicAuth({
@@ -54,7 +69,8 @@ app.post('/p/:id', async (c) => {
     prompt_text: prompt,
     contributor_name: name,
   });
-  await c.env.GEN_QUEUE.send({ submissionId: id });
+  // Generate in the background; the wall picks it up on its next /api/feed poll.
+  c.executionCtx.waitUntil(runGeneration(c.env, id));
   return c.html(confirmationPage(painting));
 });
 
@@ -138,19 +154,4 @@ app.post('/api/curate/derivative/:id/feature', async (c) => {
   return c.json({ ok: true });
 });
 
-export default {
-  fetch: app.fetch,
-
-  // Queue consumer: runs the generation pipeline, one job per submission.
-  async queue(batch: MessageBatch<GenJob>, env: Env): Promise<void> {
-    for (const msg of batch.messages) {
-      try {
-        await processSubmission(env, msg.body.submissionId);
-        msg.ack();
-      } catch (e) {
-        console.error('pipeline failed for', msg.body.submissionId, e);
-        msg.retry();
-      }
-    }
-  },
-};
+export default app;

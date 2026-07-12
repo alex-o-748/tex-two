@@ -12,7 +12,8 @@ derivatives are projected back into the room as a live slideshow.
 
 ## How a prompt becomes an image
 
-Claude does **not** generate images. The pipeline (a Cloudflare Queue consumer) is:
+Claude does **not** generate images. The pipeline runs in the background after the
+visitor's request returns (via `ctx.waitUntil` — no Queues needed):
 
 1. Claude (`claude-haiku-4-5`) moderates the audience text.
 2. Claude crafts a strong image-**edit** instruction, seeded by the painting's
@@ -24,18 +25,18 @@ Claude does **not** generate images. The pipeline (a Cloudflare Queue consumer) 
 
 ## Stack
 
-Cloudflare Workers (Hono) · D1 (SQLite) · R2 (images) · Queues (pipeline) · Wrangler.
+Cloudflare Workers (Hono) · D1 (SQLite) · R2 (images) · Wrangler. Runs on the
+Workers **free** plan — the generation pipeline runs in-request via `ctx.waitUntil`,
+so no Queues (and no paid plan) are required.
 
 ## Setup
 
 ```sh
 npm install
 
-# One-time Cloudflare resources
+# One-time Cloudflare resources (R2 must be enabled once in the dashboard)
 wrangler d1 create tex-two-db          # paste database_id into wrangler.jsonc
 wrangler r2 bucket create tex-two-images
-wrangler queues create art-gen-queue
-wrangler queues create art-gen-dlq     # dead-letter for exhausted retries
 
 # Schema
 npm run db:migrate                     # (or db:migrate:local for local dev)

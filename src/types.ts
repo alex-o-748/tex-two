@@ -1,7 +1,6 @@
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
-  GEN_QUEUE: Queue<GenJob>;
 
   // Secrets (wrangler secret put ...)
   ANTHROPIC_API_KEY: string;
@@ -11,11 +10,6 @@ export interface Env {
   // Vars
   AUTO_APPROVE: string; // "true" | "false"
   PUBLIC_BASE_URL: string;
-}
-
-/** Message enqueued when a visitor submits a prompt. */
-export interface GenJob {
-  submissionId: string;
 }
 
 export interface Painting {
