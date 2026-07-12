@@ -1,0 +1,4 @@
+# Copy to `.dev.vars` for `wrangler dev`, or set with `wrangler secret put <NAME>` in prod.
+ANTHROPIC_API_KEY=sk-ant-...
+IMAGE_API_KEY=sk-...            # OpenAI key for gpt-image-1 (or your ImageProvider's key)
+CURATE_PASSWORD=change-me       # password for the /curate dashboard (username is ignored)

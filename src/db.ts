@@ -1,0 +1,133 @@
+import type { Env, Painting, Submission, SubmissionStatus, Derivative } from './types';
+
+// ---- Paintings ----
+
+export async function insertPainting(
+  env: Env,
+  p: Pick<Painting, 'id' | 'title' | 'r2_key' | 'media_type' | 'description' | 'style_notes'>
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO paintings (id, title, r2_key, media_type, description, style_notes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(p.id, p.title, p.r2_key, p.media_type, p.description, p.style_notes, Date.now())
+    .run();
+}
+
+export async function getPainting(env: Env, id: string): Promise<Painting | null> {
+  return env.DB.prepare(`SELECT * FROM paintings WHERE id = ?`).bind(id).first<Painting>();
+}
+
+export async function listPaintings(env: Env): Promise<Painting[]> {
+  const r = await env.DB.prepare(`SELECT * FROM paintings ORDER BY created_at ASC`).all<Painting>();
+  return r.results ?? [];
+}
+
+// ---- Submissions ----
+
+export async function insertSubmission(
+  env: Env,
+  s: Pick<Submission, 'id' | 'painting_id' | 'prompt_text' | 'contributor_name'>
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO submissions (id, painting_id, prompt_text, contributor_name, status, created_at)
+     VALUES (?, ?, ?, ?, 'queued', ?)`
+  )
+    .bind(s.id, s.painting_id, s.prompt_text, s.contributor_name, Date.now())
+    .run();
+}
+
+export async function getSubmission(env: Env, id: string): Promise<Submission | null> {
+  return env.DB.prepare(`SELECT * FROM submissions WHERE id = ?`).bind(id).first<Submission>();
+}
+
+export async function setSubmissionStatus(
+  env: Env,
+  id: string,
+  status: SubmissionStatus,
+  reason?: string
+): Promise<void> {
+  await env.DB.prepare(`UPDATE submissions SET status = ?, moderation_reason = ? WHERE id = ?`)
+    .bind(status, reason ?? null, id)
+    .run();
+}
+
+// ---- Derivatives ----
+
+export async function insertDerivative(
+  env: Env,
+  d: Pick<Derivative, 'id' | 'submission_id' | 'painting_id' | 'r2_key' | 'media_type' | 'crafted_prompt'>
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO derivatives
+       (id, submission_id, painting_id, r2_key, media_type, crafted_prompt, featured, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)`
+  )
+    .bind(d.id, d.submission_id, d.painting_id, d.r2_key, d.media_type, d.crafted_prompt, Date.now())
+    .run();
+}
+
+/** A derivative joined with its submission + painting, for the wall and dashboard. */
+export interface FeedItem {
+  id: string;
+  submission_id: string;
+  painting_id: string;
+  painting_title: string;
+  original_key: string;
+  derivative_key: string;
+  prompt_text: string;
+  contributor_name: string | null;
+  status: SubmissionStatus;
+  featured: number;
+  sort_order: number;
+  created_at: number;
+}
+
+const FEED_SELECT = `
+  SELECT d.id, d.submission_id, d.painting_id,
+         p.title AS painting_title, p.r2_key AS original_key,
+         d.r2_key AS derivative_key,
+         s.prompt_text, s.contributor_name, s.status,
+         d.featured, d.sort_order, d.created_at
+  FROM derivatives d
+  JOIN submissions s ON s.id = d.submission_id
+  JOIN paintings   p ON p.id = d.painting_id`;
+
+/** Approved, visible derivatives for the projection wall. */
+export async function listApproved(env: Env): Promise<FeedItem[]> {
+  const r = await env.DB.prepare(
+    `${FEED_SELECT}
+     WHERE s.status = 'approved'
+     ORDER BY d.featured DESC, d.sort_order ASC, d.created_at DESC
+     LIMIT 300`
+  ).all<FeedItem>();
+  return r.results ?? [];
+}
+
+/** Everything with a generated image, for the curator dashboard. */
+export async function listAllDerivatives(env: Env): Promise<FeedItem[]> {
+  const r = await env.DB.prepare(
+    `${FEED_SELECT} ORDER BY d.created_at DESC LIMIT 500`
+  ).all<FeedItem>();
+  return r.results ?? [];
+}
+
+export async function setFeatured(env: Env, derivativeId: string, featured: boolean): Promise<void> {
+  await env.DB.prepare(`UPDATE derivatives SET featured = ? WHERE id = ?`)
+    .bind(featured ? 1 : 0, derivativeId)
+    .run();
+}
+
+export async function setSortOrder(env: Env, derivativeId: string, order: number): Promise<void> {
+  await env.DB.prepare(`UPDATE derivatives SET sort_order = ? WHERE id = ?`)
+    .bind(order, derivativeId)
+    .run();
+}
+
+/** Rejected submissions (for the dashboard's "blocked" view). */
+export async function listRejected(env: Env): Promise<Submission[]> {
+  const r = await env.DB.prepare(
+    `SELECT * FROM submissions WHERE status = 'rejected' ORDER BY created_at DESC LIMIT 100`
+  ).all<Submission>();
+  return r.results ?? [];
+}
