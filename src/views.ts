@@ -1,4 +1,4 @@
-import type { Painting } from './types';
+import type { Drawing } from './types';
 import { escapeHtml } from './util';
 
 function layout(title: string, body: string, head = ''): string {
@@ -34,21 +34,21 @@ const HINTS = [
   'turn it into a dream',
 ];
 
-export function submitPage(painting: Painting): string {
-  const imgUrl = `/img/${painting.r2_key}`;
+export function submitPage(drawing: Drawing): string {
+  const imgUrl = `/img/${drawing.r2_key}`;
   const chips = HINTS.map(
     (h) => `<button type="button" class="chip" data-hint="${escapeHtml(h)}">${escapeHtml(h)}</button>`
   ).join('');
   const body = `
 <main class="wrap">
   <figure>
-    <img src="${imgUrl}" alt="${escapeHtml(painting.title)}">
-    <figcaption>${escapeHtml(painting.title)}</figcaption>
+    <img src="${imgUrl}" alt="${escapeHtml(drawing.title)}">
+    <figcaption>${escapeHtml(drawing.title)}</figcaption>
   </figure>
-  <h1>Reshape this painting</h1>
+  <h1>Reshape this drawing</h1>
   <p class="lede">Leave your idea &mdash; add, remove, or reimagine. The artwork will be
      transformed from your words and projected in this room.</p>
-  <form method="post" action="/p/${painting.id}" id="f">
+  <form method="post" action="/p/${drawing.id}" id="f">
     <div class="chips">${chips}</div>
     <textarea name="prompt" id="prompt" rows="3" maxlength="400" required
       placeholder="e.g. add a flock of paper birds rising into the sky"></textarea>
@@ -87,18 +87,18 @@ export function submitPage(painting: Painting): string {
     p.focus();
   }));
 </script>`;
-  return layout(`Reshape &mdash; ${painting.title}`, body);
+  return layout(`Reshape &mdash; ${drawing.title}`, body);
 }
 
-export function confirmationPage(painting: Painting): string {
+export function confirmationPage(drawing: Drawing): string {
   const body = `
 <main class="wrap">
   <div class="card">
     <div class="spark">&#10022;</div>
-    <h1>Your idea is being painted&hellip;</h1>
-    <p>Watch the wall &mdash; your transformation of <em>${escapeHtml(painting.title)}</em>
+    <h1>Your idea is being drawn&hellip;</h1>
+    <p>Watch the wall &mdash; your transformation of <em>${escapeHtml(drawing.title)}</em>
        will appear there shortly, once it clears a quick safety check.</p>
-    <a class="again" href="/p/${painting.id}">Leave another idea</a>
+    <a class="again" href="/p/${drawing.id}">Leave another idea</a>
   </div>
 </main>
 <style>
@@ -208,14 +208,14 @@ export function curatePage(): string {
 </header>
 
 <section class="panel">
-  <h2>Add a painting</h2>
+  <h2>Add a drawing</h2>
   <form id="upload">
-    <input name="title" placeholder="Painting title" required>
+    <input name="title" placeholder="Drawing title" required>
     <input type="file" name="image" accept="image/png,image/jpeg" required>
     <button type="submit">Upload &amp; analyze</button>
     <span id="upstatus"></span>
   </form>
-  <div id="paintings" class="grid"></div>
+  <div id="drawings" class="grid"></div>
 </section>
 
 <section class="panel">
@@ -282,13 +282,13 @@ function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 
 async function load() {
   const state = await j('/api/curate/state');
-  document.getElementById('paintings').innerHTML = state.paintings.map(p => \`
+  document.getElementById('drawings').innerHTML = state.drawings.map(p => \`
     <div class="card">
       <img src="/img/\${p.r2_key}" alt="">
       <div class="meta"><div class="q">\${esc(p.title)}</div>
         <div class="sub">\${esc(p.description || 'no description')}</div></div>
       <div class="qr">\${p.qr}<a href="\${esc(p.submit_url)}" target="_blank">\${esc(p.submit_url)}</a></div>
-    </div>\`).join('') || '<p class="sub">No paintings yet.</p>';
+    </div>\`).join('') || '<p class="sub">No drawings yet.</p>';
 
   document.getElementById('attention').innerHTML = (state.needs_attention || []).map(s => \`
     <div class="card att">
@@ -313,7 +313,7 @@ async function load() {
       <img src="/img/\${d.derivative_key}" alt="">
       <div class="meta">
         <div class="q">&ldquo;\${esc(d.prompt_text)}&rdquo;</div>
-        <div class="sub">\${esc(d.contributor_name || 'anonymous')} · \${esc(d.painting_title)}</div>
+        <div class="sub">\${esc(d.contributor_name || 'anonymous')} · \${esc(d.drawing_title)}</div>
         <span class="badge b-\${d.status}">\${d.status}</span>
         \${d.featured ? '<span class="badge b-approved">featured</span>' : ''}
       </div>

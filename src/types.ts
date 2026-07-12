@@ -12,7 +12,7 @@ export interface Env {
   PUBLIC_BASE_URL: string;
 }
 
-export interface Painting {
+export interface Drawing {
   id: string;
   title: string;
   r2_key: string;
@@ -32,7 +32,7 @@ export type SubmissionStatus =
 
 export interface Submission {
   id: string;
-  painting_id: string;
+  drawing_id: string;
   prompt_text: string;
   contributor_name: string | null;
   status: SubmissionStatus;
@@ -46,7 +46,7 @@ export interface Submission {
 export interface Derivative {
   id: string;
   submission_id: string;
-  painting_id: string;
+  drawing_id: string;
   r2_key: string;
   media_type: string;
   crafted_prompt: string | null;
