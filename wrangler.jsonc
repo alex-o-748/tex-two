@@ -21,7 +21,7 @@
     {
       "binding": "DB",
       "database_name": "tex-two-db",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "93ba745f-cfca-40d0-a025-ee48416cb866",
       "migrations_dir": "migrations"
     }
   ],
