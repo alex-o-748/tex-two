@@ -78,17 +78,19 @@ const MAX_ATTEMPTS = 3;
  */
 export async function reapStuck(env: Env): Promise<void> {
   const cutoff = Date.now() - STUCK_MS;
+  // A fresh claim always stamps claimed_at atomically, so a `generating` row with
+  // NULL claimed_at is a legacy/orphaned job — treat it as stuck too.
   await env.DB.prepare(
     `UPDATE submissions
         SET status = 'rejected', moderation_reason = 'generation failed after retries'
-      WHERE status = 'generating' AND claimed_at < ? AND attempts >= ?`
+      WHERE status = 'generating' AND (claimed_at IS NULL OR claimed_at < ?) AND attempts >= ?`
   )
     .bind(cutoff, MAX_ATTEMPTS)
     .run();
   await env.DB.prepare(
     `UPDATE submissions
         SET status = 'queued', claimed_at = NULL
-      WHERE status = 'generating' AND claimed_at < ? AND attempts < ?`
+      WHERE status = 'generating' AND (claimed_at IS NULL OR claimed_at < ?) AND attempts < ?`
   )
     .bind(cutoff, MAX_ATTEMPTS)
     .run();
