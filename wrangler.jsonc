@@ -10,6 +10,9 @@
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Cron backstop for the generation pipeline: reaps stuck jobs and processes
+  // any still-queued submissions once a minute (free plan; no Queues needed).
+  "triggers": { "crons": ["* * * * *"] },
   "vars": {
     // "true" = AI-passed derivatives appear on the wall automatically (artist can veto).
     // "false" = every derivative waits for artist approval before it shows.

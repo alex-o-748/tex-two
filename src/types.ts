@@ -37,6 +37,8 @@ export interface Submission {
   contributor_name: string | null;
   status: SubmissionStatus;
   moderation_reason: string | null;
+  attempts: number;
+  claimed_at: number | null;
   created_at: number;
 }
 

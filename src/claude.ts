@@ -26,6 +26,7 @@ async function callClaude(
       system: opts.system,
       messages: [{ role: 'user', content: opts.content }],
     }),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     throw new Error(`anthropic ${res.status}: ${await res.text()}`);

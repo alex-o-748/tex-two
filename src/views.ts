@@ -219,6 +219,11 @@ export function curatePage(): string {
 </section>
 
 <section class="panel">
+  <h2>Needs attention</h2>
+  <div id="attention" class="grid"></div>
+</section>
+
+<section class="panel">
   <h2>Derivatives</h2>
   <div id="derivatives" class="grid"></div>
 </section>
@@ -252,6 +257,8 @@ export function curatePage(): string {
   .qr { padding: 10px 12px; border-top: 1px solid #26232e; }
   .qr svg { width: 96px; height: 96px; background: #fff; border-radius: 6px; }
   .qr a { font-size: 12px; display: block; margin-top: 6px; word-break: break-all; }
+  .card.att .badge { margin-top: 0; margin-bottom: 8px; }
+  .card.att .q { margin-top: 4px; }
 </style>
 
 <script>
@@ -282,6 +289,20 @@ async function load() {
         <div class="sub">\${esc(p.description || 'no description')}</div></div>
       <div class="qr">\${p.qr}<a href="\${esc(p.submit_url)}" target="_blank">\${esc(p.submit_url)}</a></div>
     </div>\`).join('') || '<p class="sub">No paintings yet.</p>';
+
+  document.getElementById('attention').innerHTML = (state.needs_attention || []).map(s => \`
+    <div class="card att">
+      <div class="meta">
+        <span class="badge b-\${s.status}">\${s.status}</span>
+        <div class="q">&ldquo;\${esc(s.prompt_text)}&rdquo;</div>
+        <div class="sub">\${esc(s.contributor_name || 'anonymous')}\${s.moderation_reason ? ' · ' + esc(s.moderation_reason) : ''}</div>
+      </div>
+      <div class="actions">
+        \${s.status === 'rejected'
+          ? \`<button onclick="act('\${s.id}','retry')">Retry</button>\`
+          : '<span class="sub">processing&hellip;</span>'}
+      </div>
+    </div>\`).join('') || '<p class="sub">Nothing needs attention.</p>';
 
   document.getElementById('derivatives').innerHTML = state.derivatives.map(d => {
     const isApproved = d.status === 'approved';

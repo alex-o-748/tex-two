@@ -12,17 +12,28 @@ import { submitPage, confirmationPage, showPage, curatePage } from './views';
 const app = new Hono<{ Bindings: Env }>();
 
 /**
- * Run the generation pipeline in the background (via ctx.waitUntil) after the
- * visitor's request has already returned. No Queues needed — this keeps the app
- * on the Workers free plan. On failure we mark the submission `rejected` so it
- * never hangs in `generating` and stays visible on /curate.
+ * Claim a submission and run the generation pipeline. Used both by the submit
+ * request's fast-path (ctx.waitUntil) and by the cron backstop. The atomic claim
+ * ensures only one of them processes a given row. On a thrown error we mark it
+ * `rejected` (visible on /curate with a Retry button); jobs whose worker is
+ * evicted mid-run stay `generating` and are recovered by the cron reaper.
  */
 async function runGeneration(env: Env, submissionId: string): Promise<void> {
+  if (!(await db.claimSubmission(env, submissionId))) return; // already claimed elsewhere
   try {
     await processSubmission(env, submissionId);
   } catch (e) {
     console.error('generation failed for', submissionId, e);
     await db.setSubmissionStatus(env, submissionId, 'rejected', 'generation failed');
+  }
+}
+
+/** Cron backstop: recover stuck jobs, then process a few queued submissions. */
+async function processBatch(env: Env): Promise<void> {
+  await db.reapStuck(env);
+  const ids = await db.listQueuedIds(env, 2);
+  for (const id of ids) {
+    await runGeneration(env, id);
   }
 }
 
@@ -96,7 +107,8 @@ app.get('/api/curate/state', async (c) => {
     })
   );
   const derivatives = await db.listAllDerivatives(c.env);
-  return c.json({ paintings: withQr, derivatives });
+  const needsAttention = await db.listNeedsAttention(c.env);
+  return c.json({ paintings: withQr, derivatives, needs_attention: needsAttention });
 });
 
 app.post('/api/curate/upload', async (c) => {
@@ -136,12 +148,13 @@ app.post('/api/curate/upload', async (c) => {
   return c.json({ ok: true, id });
 });
 
-// Approve / hide a submission (drives what's on the wall).
+// Approve / hide / retry a submission.
 app.post('/api/curate/submission/:id/:action', async (c) => {
   const id = c.req.param('id');
   const action = c.req.param('action');
   if (action === 'approve') await db.setSubmissionStatus(c.env, id, 'approved');
   else if (action === 'hide') await db.setSubmissionStatus(c.env, id, 'hidden');
+  else if (action === 'retry') await db.retrySubmission(c.env, id);
   else return c.json({ error: 'unknown action' }, 400);
   return c.json({ ok: true });
 });
@@ -154,4 +167,11 @@ app.post('/api/curate/derivative/:id/feature', async (c) => {
   return c.json({ ok: true });
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+
+  // Cron trigger (every minute): durable backstop for the generation pipeline.
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(processBatch(env));
+  },
+};

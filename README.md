@@ -23,6 +23,12 @@ visitor's request returns (via `ctx.waitUntil` — no Queues needed):
 4. Claude vision moderates the output image.
 5. It's stored and — with `AUTO_APPROVE=true` — shown on the wall (artist can veto).
 
+Generation runs on the submit request via `ctx.waitUntil` (fast path), with a
+**Cron Trigger** (every minute) as a durable backstop: it recovers jobs whose worker
+was evicted mid-run and retries transient failures (up to 3×). Blocked or failed
+submissions surface in a **Needs attention** section on `/curate` with a **Retry**
+button, so nothing fails silently.
+
 ## Stack
 
 Cloudflare Workers (Hono) · D1 (SQLite) · R2 (images) · Wrangler. Runs on the
@@ -38,7 +44,7 @@ npm install
 wrangler d1 create tex-two-db          # paste database_id into wrangler.jsonc
 wrangler r2 bucket create tex-two-images
 
-# Schema
+# Schema (applies all migrations in ./migrations)
 npm run db:migrate                     # (or db:migrate:local for local dev)
 
 # Secrets

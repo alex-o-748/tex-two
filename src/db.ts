@@ -52,6 +52,79 @@ export async function setSubmissionStatus(
     .run();
 }
 
+/**
+ * Atomically claim a queued submission for processing. Flips it to `generating`,
+ * stamps `claimed_at`, and bumps `attempts` — but only if it's still `queued`, so
+ * the waitUntil fast-path and the cron backstop can never process the same row.
+ * Returns true if this caller won the claim.
+ */
+export async function claimSubmission(env: Env, id: string): Promise<boolean> {
+  const r = await env.DB.prepare(
+    `UPDATE submissions
+        SET status = 'generating', claimed_at = ?, attempts = attempts + 1
+      WHERE id = ? AND status = 'queued'`
+  )
+    .bind(Date.now(), id)
+    .run();
+  return (r.meta.changes ?? 0) === 1;
+}
+
+const STUCK_MS = 180_000; // a claim older than this with no result is considered dead
+const MAX_ATTEMPTS = 3;
+
+/**
+ * Recover jobs whose worker was evicted mid-pipeline (stuck in `generating`).
+ * Exhausted ones (>= MAX_ATTEMPTS) are marked rejected; the rest are re-queued.
+ */
+export async function reapStuck(env: Env): Promise<void> {
+  const cutoff = Date.now() - STUCK_MS;
+  await env.DB.prepare(
+    `UPDATE submissions
+        SET status = 'rejected', moderation_reason = 'generation failed after retries'
+      WHERE status = 'generating' AND claimed_at < ? AND attempts >= ?`
+  )
+    .bind(cutoff, MAX_ATTEMPTS)
+    .run();
+  await env.DB.prepare(
+    `UPDATE submissions
+        SET status = 'queued', claimed_at = NULL
+      WHERE status = 'generating' AND claimed_at < ? AND attempts < ?`
+  )
+    .bind(cutoff, MAX_ATTEMPTS)
+    .run();
+}
+
+/** IDs of submissions waiting to be processed, oldest first. */
+export async function listQueuedIds(env: Env, limit: number): Promise<string[]> {
+  const r = await env.DB.prepare(
+    `SELECT id FROM submissions WHERE status = 'queued' ORDER BY created_at ASC LIMIT ?`
+  )
+    .bind(limit)
+    .all<{ id: string }>();
+  return (r.results ?? []).map((row) => row.id);
+}
+
+/** Put a failed/blocked submission back in line, from the dashboard. */
+export async function retrySubmission(env: Env, id: string): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE submissions
+        SET status = 'queued', attempts = 0, claimed_at = NULL, moderation_reason = NULL
+      WHERE id = ?`
+  )
+    .bind(id)
+    .run();
+}
+
+/** Submissions the curator may need to act on: failed, blocked, or in-flight. */
+export async function listNeedsAttention(env: Env): Promise<Submission[]> {
+  const r = await env.DB.prepare(
+    `SELECT * FROM submissions
+      WHERE status IN ('rejected', 'queued', 'generating')
+      ORDER BY created_at DESC LIMIT 100`
+  ).all<Submission>();
+  return r.results ?? [];
+}
+
 // ---- Derivatives ----
 
 export async function insertDerivative(
@@ -122,12 +195,4 @@ export async function setSortOrder(env: Env, derivativeId: string, order: number
   await env.DB.prepare(`UPDATE derivatives SET sort_order = ? WHERE id = ?`)
     .bind(order, derivativeId)
     .run();
-}
-
-/** Rejected submissions (for the dashboard's "blocked" view). */
-export async function listRejected(env: Env): Promise<Submission[]> {
-  const r = await env.DB.prepare(
-    `SELECT * FROM submissions WHERE status = 'rejected' ORDER BY created_at DESC LIMIT 100`
-  ).all<Submission>();
-  return r.results ?? [];
 }

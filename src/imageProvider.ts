@@ -42,6 +42,7 @@ export const openaiProvider: ImageProvider = {
       method: 'POST',
       headers: { authorization: `Bearer ${env.IMAGE_API_KEY}` },
       body: form,
+      signal: AbortSignal.timeout(120_000),
     });
     if (!res.ok) {
       throw new Error(`image provider ${res.status}: ${await res.text()}`);

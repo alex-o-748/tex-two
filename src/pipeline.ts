@@ -5,19 +5,17 @@ import { imageProvider } from './imageProvider';
 import { bufferToBase64 } from './util';
 
 /**
- * Run the full per-submission pipeline:
+ * Run the full per-submission pipeline for an already-CLAIMED submission
+ * (status `generating`, set atomically by db.claimSubmission):
  *   moderate text -> craft edit instruction -> edit the original ->
  *   moderate the output image -> store derivative -> set status.
  *
- * Throws on transient/infrastructure failure so the queue can retry.
- * "Content rejected" is a normal terminal outcome (not an error).
+ * Throws on transient/infrastructure failure so the caller can mark it failed /
+ * let the cron backstop retry. "Content rejected" is a normal terminal outcome.
  */
 export async function processSubmission(env: Env, submissionId: string): Promise<void> {
   const sub = await db.getSubmission(env, submissionId);
   if (!sub) return;
-  if (sub.status !== 'queued') return; // already handled (e.g. a retry after success)
-
-  await db.setSubmissionStatus(env, sub.id, 'generating');
 
   // 1. Moderate the audience text.
   const textCheck = await moderateText(env, sub.prompt_text);
