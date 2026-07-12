@@ -39,6 +39,7 @@ export interface Submission {
   moderation_reason: string | null;
   attempts: number;
   claimed_at: number | null;
+  override: number; // 1 = curator override: skip moderation
   created_at: number;
 }
 

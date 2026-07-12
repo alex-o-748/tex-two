@@ -48,12 +48,14 @@ export interface ModerationResult {
 export async function moderateText(env: Env, prompt: string): Promise<ModerationResult> {
   const text = await callClaude(env, {
     system:
-      'You are a content-safety filter for a public art installation open to all ages. ' +
-      'Reject prompts that request sexual/explicit content, hate or harassment, graphic ' +
-      'violence or gore, self-harm, illegal acts, or that target/identify a real private ' +
-      'individual, or that contain personal data (PII). Playful, weird, surreal, political, ' +
-      'or critical ideas are fine. Respond with ONLY a JSON object: ' +
-      '{"allowed": boolean, "reason": string}. Keep reason short.',
+      'You are a light-touch content filter for an ADULT fine-art gallery. Assume a mature ' +
+      'audience. Allow dark, macabre, surreal, grotesque, violent-as-art, sexual-in-an-' +
+      'artistic-sense, political, provocative, and critical ideas — this is art, err on the ' +
+      'side of allowing. Only reject a narrow hard floor: explicit pornographic/hardcore ' +
+      'sexual content, ANY sexual content involving minors, hate symbols or harassment ' +
+      'targeting a protected group, or a request to depict a real, identifiable private ' +
+      'person in a defamatory or harmful way. When unsure, ALLOW. Respond with ONLY a JSON ' +
+      'object: {"allowed": boolean, "reason": string}. Keep reason short.',
     content: prompt,
     maxTokens: 200,
   });
@@ -125,14 +127,16 @@ export async function moderateImage(
 ): Promise<ModerationResult> {
   const text = await callClaude(env, {
     system:
-      'You are a content-safety filter for a public all-ages art wall. Given an image, ' +
-      'reject it if it contains sexual/explicit content, hate symbols, graphic violence or ' +
-      'gore, or a realistic depiction of a real identifiable private person in a ' +
-      'compromising way. Artistic, surreal, and abstract imagery is fine. Respond with ' +
-      'ONLY JSON: {"allowed": boolean, "reason": string}.',
+      'You are a light-touch content filter for an ADULT fine-art gallery wall. Assume a ' +
+      'mature audience. Dark, macabre, grotesque, bloody, skeletal, nude (non-explicit), ' +
+      'surreal, disturbing, and provocative imagery is all acceptable ART — allow it. Only ' +
+      'reject a narrow hard floor: explicit pornographic/hardcore sexual imagery, ANY ' +
+      'sexual depiction of a minor, hate symbols, or a realistic depiction of a real ' +
+      'identifiable private person in a defamatory/harmful way. When unsure, ALLOW. ' +
+      'Respond with ONLY JSON: {"allowed": boolean, "reason": string}.',
     content: [
       { type: 'image', source: { type: 'base64', media_type: args.mediaType, data: args.imageBase64 } },
-      { type: 'text', text: 'Is this safe to display on a public art wall?' },
+      { type: 'text', text: 'Is this acceptable for an adult art gallery wall?' },
     ],
     maxTokens: 200,
   });

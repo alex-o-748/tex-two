@@ -117,13 +117,66 @@ export async function retrySubmission(env: Env, id: string): Promise<void> {
     .run();
 }
 
+/**
+ * Curator override: publish a filter-rejected submission anyway.
+ * - If a derivative already exists (image-stage rejection), just approve it — the
+ *   image is already generated, no need to re-run the pipeline.
+ * - Otherwise (text-stage rejection, no image yet) re-queue with override=1 so the
+ *   pipeline regenerates while skipping both moderation steps.
+ */
+export async function approveAnyway(env: Env, id: string): Promise<void> {
+  const existing = await env.DB.prepare(
+    `SELECT id FROM derivatives WHERE submission_id = ? LIMIT 1`
+  )
+    .bind(id)
+    .first<{ id: string }>();
+  if (existing) {
+    await env.DB.prepare(
+      `UPDATE submissions SET status = 'approved', override = 1 WHERE id = ?`
+    )
+      .bind(id)
+      .run();
+  } else {
+    await env.DB.prepare(
+      `UPDATE submissions
+          SET status = 'queued', override = 1, attempts = 0, claimed_at = NULL, moderation_reason = NULL
+        WHERE id = ?`
+    )
+      .bind(id)
+      .run();
+  }
+}
+
+/** Remove any derivative(s) for a submission (R2 objects + rows) before regenerating. */
+export async function deleteDerivativesForSubmission(env: Env, submissionId: string): Promise<void> {
+  const r = await env.DB.prepare(`SELECT r2_key FROM derivatives WHERE submission_id = ?`)
+    .bind(submissionId)
+    .all<{ r2_key: string }>();
+  for (const row of r.results ?? []) {
+    try {
+      await env.BUCKET.delete(row.r2_key);
+    } catch {
+      /* best-effort */
+    }
+  }
+  await env.DB.prepare(`DELETE FROM derivatives WHERE submission_id = ?`)
+    .bind(submissionId)
+    .run();
+}
+
+export interface AttentionItem extends Submission {
+  derivative_key: string | null; // the flagged/generated image, if one exists
+}
+
 /** Submissions the curator may need to act on: failed, blocked, or in-flight. */
-export async function listNeedsAttention(env: Env): Promise<Submission[]> {
+export async function listNeedsAttention(env: Env): Promise<AttentionItem[]> {
   const r = await env.DB.prepare(
-    `SELECT * FROM submissions
-      WHERE status IN ('rejected', 'queued', 'generating')
-      ORDER BY created_at DESC LIMIT 100`
-  ).all<Submission>();
+    `SELECT s.*, d.r2_key AS derivative_key
+       FROM submissions s
+       LEFT JOIN derivatives d ON d.submission_id = s.id
+      WHERE s.status IN ('rejected', 'queued', 'generating')
+      ORDER BY s.created_at DESC LIMIT 100`
+  ).all<AttentionItem>();
   return r.results ?? [];
 }
 

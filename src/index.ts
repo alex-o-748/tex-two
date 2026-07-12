@@ -155,6 +155,7 @@ app.post('/api/curate/submission/:id/:action', async (c) => {
   if (action === 'approve') await db.setSubmissionStatus(c.env, id, 'approved');
   else if (action === 'hide') await db.setSubmissionStatus(c.env, id, 'hidden');
   else if (action === 'retry') await db.retrySubmission(c.env, id);
+  else if (action === 'override') await db.approveAnyway(c.env, id);
   else return c.json({ error: 'unknown action' }, 400);
   return c.json({ ok: true });
 });

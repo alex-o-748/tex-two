@@ -292,6 +292,7 @@ async function load() {
 
   document.getElementById('attention').innerHTML = (state.needs_attention || []).map(s => \`
     <div class="card att">
+      \${s.derivative_key ? \`<img src="/img/\${s.derivative_key}" alt="">\` : ''}
       <div class="meta">
         <span class="badge b-\${s.status}">\${s.status}</span>
         <div class="q">&ldquo;\${esc(s.prompt_text)}&rdquo;</div>
@@ -299,7 +300,8 @@ async function load() {
       </div>
       <div class="actions">
         \${s.status === 'rejected'
-          ? \`<button onclick="act('\${s.id}','retry')">Retry</button>\`
+          ? \`<button class="on" onclick="act('\${s.id}','override')">Approve anyway</button>
+             <button onclick="act('\${s.id}','retry')">Retry</button>\`
           : '<span class="sub">processing&hellip;</span>'}
       </div>
     </div>\`).join('') || '<p class="sub">Nothing needs attention.</p>';

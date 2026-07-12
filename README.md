@@ -23,6 +23,14 @@ visitor's request returns (via `ctx.waitUntil` — no Queues needed):
 4. Claude vision moderates the output image.
 5. It's stored and — with `AUTO_APPROVE=true` — shown on the wall (artist can veto).
 
+Moderation is a **light-touch adult-gallery** filter (`src/claude.ts`): dark, macabre,
+surreal, and provocative art passes; only a narrow hard floor is auto-blocked (explicit
+sexual content, sexual content involving minors, hate symbols, or harmful depictions of a
+real identifiable person). A flagged derivative is still generated and stored, and the
+curator can **Approve anyway** from the "Needs attention" panel — which publishes it to the
+wall (setting an `override` flag that also bypasses the filter on regeneration). Tune the
+policy in the two moderation prompts in `src/claude.ts`.
+
 Generation runs on the submit request via `ctx.waitUntil` (fast path), with a
 **Cron Trigger** (every minute) as a durable backstop: it recovers jobs whose worker
 was evicted mid-run and retries transient failures (up to 3×). Blocked or failed
