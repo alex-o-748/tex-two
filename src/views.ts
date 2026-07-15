@@ -143,20 +143,29 @@ export function showPage(): string {
   const cap = document.getElementById('caption');
   const empty = document.getElementById('empty');
   const HOLD = 8000, POLL = 5000;
-  let playlist = [], idx = 0, current = null;
+  // One projector, all approved derivatives together: pool holds every item;
+  // queue is a shuffled play order that reshuffles each time it's exhausted.
+  let pool = [], queue = [], current = null;
 
-  function sameSet(a, b) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) if (a[i].id !== b[i].id) return false;
-    return true;
+  function idsOf(items) { return items.map((x) => x.id).sort().join(','); }
+
+  function shuffle(items) {
+    const a = items.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
   }
 
   async function refresh() {
     try {
       const items = await (await fetch('/api/feed')).json();
-      if (!sameSet(items, playlist)) {
-        playlist = items;
-        if (idx >= playlist.length) idx = 0;
+      // Only rebuild when the set of images actually changes, so a poll doesn't
+      // interrupt the current shuffled run mid-cycle.
+      if (idsOf(items) !== idsOf(pool)) {
+        pool = items;
+        queue = []; // reshuffle from the fresh pool on the next tick
       }
     } catch (e) { /* keep showing what we have */ }
   }
@@ -177,14 +186,13 @@ export function showPage(): string {
   }
 
   function tick() {
-    if (playlist.length === 0) {
+    if (pool.length === 0) {
       empty.style.display = 'grid';
       cap.classList.remove('on');
       return;
     }
-    if (idx >= playlist.length) idx = 0;
-    show(playlist[idx]);
-    idx++;
+    if (queue.length === 0) queue = shuffle(pool);
+    show(queue.shift());
   }
 
   function escapeHtml(s) {
@@ -283,6 +291,7 @@ upForm.addEventListener('submit', async (e) => {
 });
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function fmtTime(ts){ if(!ts) return ''; try { return new Date(ts).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e){ return ''; } }
 
 async function load() {
   const state = await j('/api/curate/state');
