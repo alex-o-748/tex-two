@@ -99,6 +99,53 @@ app.post('/p/:id', async (c) => {
   return c.html(confirmationPage(drawing));
 });
 
+// Visitor-edited upload: the visitor downloads the drawing, edits it in their own
+// tools, and uploads their version. No AI transform — we store their image as the
+// derivative directly and let the pipeline moderate it before it reaches the wall.
+app.post('/p/:id/upload', async (c) => {
+  const drawing = await db.getDrawing(c.env, c.req.param('id'));
+  if (!drawing) return c.notFound();
+
+  const body = await c.req.parseBody();
+  const file = body.image;
+  if (!(file instanceof File) || !/^image\/(png|jpe?g)$/.test(file.type)) {
+    return c.html(submitPage(drawing, 'Please choose a PNG or JPEG image.'));
+  }
+
+  const isJpeg = /jpe?g$/.test(file.type);
+  const mediaType = isJpeg ? 'image/jpeg' : 'image/png';
+  const ext = isJpeg ? 'jpg' : 'png';
+  const bytes = await file.arrayBuffer();
+  const name = String(body.name ?? '').trim().slice(0, 40) || null;
+  const caption = String(body.caption ?? '').trim().slice(0, 400) || 'Edited by hand';
+
+  // Store the visitor's image as the derivative up front, then attach a submission
+  // so the standard claim/moderation/gate machinery (and the cron backstop) applies.
+  const submissionId = crypto.randomUUID();
+  const derivativeId = crypto.randomUUID();
+  const key = `derivatives/${derivativeId}.${ext}`;
+  await c.env.BUCKET.put(key, bytes, { httpMetadata: { contentType: mediaType } });
+
+  await db.insertSubmission(c.env, {
+    id: submissionId,
+    drawing_id: drawing.id,
+    prompt_text: caption,
+    contributor_name: name,
+    kind: 'upload',
+  });
+  await db.insertDerivative(c.env, {
+    id: derivativeId,
+    submission_id: submissionId,
+    drawing_id: drawing.id,
+    r2_key: key,
+    media_type: mediaType,
+    crafted_prompt: null,
+  });
+
+  c.executionCtx.waitUntil(runGeneration(c.env, submissionId));
+  return c.html(confirmationPage(drawing, 'upload'));
+});
+
 // ---- Projection wall ----
 app.get('/show', (c) => c.html(showPage()));
 
@@ -167,8 +214,8 @@ app.post('/api/curate/upload', async (c) => {
 // new submissions pick it up immediately (existing derivatives via Retry).
 app.post('/api/curate/painting/:id', async (c) => {
   const id = c.req.param('id');
-  const painting = await db.getPainting(c.env, id);
-  if (!painting) return c.json({ error: 'not found' }, 404);
+  const drawing = await db.getDrawing(c.env, id);
+  if (!drawing) return c.json({ error: 'not found' }, 404);
   const { description, style_notes } = await c.req.json<{
     description?: string;
     style_notes?: string;

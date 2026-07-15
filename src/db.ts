@@ -1,4 +1,4 @@
-import type { Env, Drawing, Submission, SubmissionStatus, Derivative } from './types';
+import type { Env, Drawing, Submission, SubmissionStatus, SubmissionKind, Derivative } from './types';
 
 // ---- Drawings ----
 
@@ -35,7 +35,7 @@ export async function updatePaintingProfile(
   description: string | null,
   styleNotes: string | null
 ): Promise<void> {
-  await env.DB.prepare(`UPDATE paintings SET description = ?, style_notes = ? WHERE id = ?`)
+  await env.DB.prepare(`UPDATE drawings SET description = ?, style_notes = ? WHERE id = ?`)
     .bind(description || null, styleNotes || null, id)
     .run();
 }
@@ -44,13 +44,13 @@ export async function updatePaintingProfile(
 
 export async function insertSubmission(
   env: Env,
-  s: Pick<Submission, 'id' | 'drawing_id' | 'prompt_text' | 'contributor_name'>
+  s: Pick<Submission, 'id' | 'drawing_id' | 'prompt_text' | 'contributor_name'> & { kind?: SubmissionKind }
 ): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO submissions (id, drawing_id, prompt_text, contributor_name, status, created_at)
-     VALUES (?, ?, ?, ?, 'queued', ?)`
+    `INSERT INTO submissions (id, drawing_id, prompt_text, contributor_name, kind, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'queued', ?)`
   )
-    .bind(s.id, s.drawing_id, s.prompt_text, s.contributor_name, Date.now())
+    .bind(s.id, s.drawing_id, s.prompt_text, s.contributor_name, s.kind ?? 'prompt', Date.now())
     .run();
 }
 
@@ -210,6 +210,16 @@ export async function insertDerivative(
   )
     .bind(d.id, d.submission_id, d.drawing_id, d.r2_key, d.media_type, d.crafted_prompt, Date.now())
     .run();
+}
+
+/** The (single) derivative stored for a submission, if any. */
+export async function getDerivativeForSubmission(
+  env: Env,
+  submissionId: string
+): Promise<Derivative | null> {
+  return env.DB.prepare(`SELECT * FROM derivatives WHERE submission_id = ? LIMIT 1`)
+    .bind(submissionId)
+    .first<Derivative>();
 }
 
 /** A derivative joined with its submission + drawing, for the wall and dashboard. */
