@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 
 import type { Env } from './types';
 import * as db from './db';
-import { describePainting } from './claude';
+import { describeDrawing } from './claude';
 import { processSubmission } from './pipeline';
 import { bufferToBase64 } from './util';
 import { submitPage, confirmationPage, showPage, curatePage } from './views';
@@ -60,29 +60,29 @@ app.get('/img/*', async (c) => {
 
 // ---- Submit surface ----
 app.get('/p/:id', async (c) => {
-  const painting = await db.getPainting(c.env, c.req.param('id'));
-  if (!painting) return c.notFound();
-  return c.html(submitPage(painting));
+  const drawing = await db.getDrawing(c.env, c.req.param('id'));
+  if (!drawing) return c.notFound();
+  return c.html(submitPage(drawing));
 });
 
 app.post('/p/:id', async (c) => {
-  const painting = await db.getPainting(c.env, c.req.param('id'));
-  if (!painting) return c.notFound();
+  const drawing = await db.getDrawing(c.env, c.req.param('id'));
+  if (!drawing) return c.notFound();
   const body = await c.req.parseBody();
   const prompt = String(body.prompt ?? '').trim().slice(0, 400);
   const name = String(body.name ?? '').trim().slice(0, 40) || null;
-  if (!prompt) return c.redirect(`/p/${painting.id}`);
+  if (!prompt) return c.redirect(`/p/${drawing.id}`);
 
   const id = crypto.randomUUID();
   await db.insertSubmission(c.env, {
     id,
-    painting_id: painting.id,
+    drawing_id: drawing.id,
     prompt_text: prompt,
     contributor_name: name,
   });
   // Generate in the background; the wall picks it up on its next /api/feed poll.
   c.executionCtx.waitUntil(runGeneration(c.env, id));
-  return c.html(confirmationPage(painting));
+  return c.html(confirmationPage(drawing));
 });
 
 // ---- Projection wall ----
@@ -98,9 +98,9 @@ app.get('/curate', (c) => c.html(curatePage()));
 
 app.get('/api/curate/state', async (c) => {
   const base = c.env.PUBLIC_BASE_URL || new URL(c.req.url).origin;
-  const paintings = await db.listPaintings(c.env);
+  const drawings = await db.listDrawings(c.env);
   const withQr = await Promise.all(
-    paintings.map(async (p) => {
+    drawings.map(async (p) => {
       const submitUrl = `${base}/p/${p.id}`;
       const qr = await QRCode.toString(submitUrl, { type: 'svg', margin: 1, width: 96 });
       return { ...p, submit_url: submitUrl, qr };
@@ -108,7 +108,7 @@ app.get('/api/curate/state', async (c) => {
   );
   const derivatives = await db.listAllDerivatives(c.env);
   const needsAttention = await db.listNeedsAttention(c.env);
-  return c.json({ paintings: withQr, derivatives, needs_attention: needsAttention });
+  return c.json({ drawings: withQr, derivatives, needs_attention: needsAttention });
 });
 
 app.post('/api/curate/upload', async (c) => {
@@ -120,24 +120,24 @@ app.post('/api/curate/upload', async (c) => {
   const mediaType = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
   const ext = mediaType === 'image/jpeg' ? 'jpg' : 'png';
   const id = crypto.randomUUID();
-  const key = `paintings/${id}.${ext}`;
+  const key = `drawings/${id}.${ext}`;
   const bytes = await file.arrayBuffer();
 
   await c.env.BUCKET.put(key, bytes, { httpMetadata: { contentType: mediaType } });
 
   let profile = { description: '', styleNotes: '' };
   try {
-    profile = await describePainting(c.env, {
+    profile = await describeDrawing(c.env, {
       imageBase64: bufferToBase64(bytes),
       mediaType,
       title,
     });
   } catch (e) {
-    // Non-fatal: painting still works without an auto-description.
-    console.error('describePainting failed', e);
+    // Non-fatal: drawing still works without an auto-description.
+    console.error('describeDrawing failed', e);
   }
 
-  await db.insertPainting(c.env, {
+  await db.insertDrawing(c.env, {
     id,
     title,
     r2_key: key,
@@ -146,6 +146,26 @@ app.post('/api/curate/upload', async (c) => {
     style_notes: profile.styleNotes || null,
   });
   return c.json({ ok: true, id });
+});
+
+// Edit a painting's auto-generated profile. The description + style seed every
+// future edit instruction, so this is how a curator corrects an off description;
+// new submissions pick it up immediately (existing derivatives via Retry).
+app.post('/api/curate/painting/:id', async (c) => {
+  const id = c.req.param('id');
+  const painting = await db.getPainting(c.env, id);
+  if (!painting) return c.json({ error: 'not found' }, 404);
+  const { description, style_notes } = await c.req.json<{
+    description?: string;
+    style_notes?: string;
+  }>();
+  await db.updatePaintingProfile(
+    c.env,
+    id,
+    String(description ?? '').trim().slice(0, 2000),
+    String(style_notes ?? '').trim().slice(0, 400)
+  );
+  return c.json({ ok: true });
 });
 
 // Approve / hide / retry a submission.

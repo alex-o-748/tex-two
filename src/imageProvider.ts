@@ -19,7 +19,7 @@ export interface ImageProvider {
 
 /**
  * Default provider: OpenAI `gpt-image-1` edits endpoint. It takes the original
- * painting as the base image and returns an edited version, which is exactly the
+ * drawing as the base image and returns an edited version, which is exactly the
  * "transform the original" flow this installation uses.
  *
  * Swap this out (Gemini image edit, Replicate img2img, ...) by implementing the
@@ -31,10 +31,10 @@ export const openaiProvider: ImageProvider = {
     const form = new FormData();
     form.append('model', 'gpt-image-1');
     form.append('prompt', req.instruction);
-    // 'auto' matches the source aspect ratio (paintings are usually landscape) so the
+    // 'auto' matches the source aspect ratio (drawings are usually landscape) so the
     // edit extends the scene instead of cropping it into a square and distorting it.
     form.append('size', 'auto');
-    // Preserve the original painting's style, palette, and structure.
+    // Preserve the original drawing's style, palette, and structure.
     form.append('input_fidelity', 'high');
     // Higher render tier — sharper, less muddy output.
     form.append('quality', 'high');

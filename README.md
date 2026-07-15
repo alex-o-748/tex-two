@@ -1,14 +1,19 @@
 # tex-two — Interactive Art Installation
 
-Audience members reshape hung paintings from their phones; the AI-transformed
+Audience members reshape hung drawings from their phones; the AI-transformed
 derivatives are projected back into the room as a live slideshow.
 
-- **Submit** (`/p/:id`) — a QR placard by each painting opens a phone form. Every
-  idea transforms the **original painting**; hint chips suggest what to ask.
+- **Submit** (`/p/:id`) — a QR placard by each drawing opens a phone form. Every
+  idea transforms the **original drawing**; hint chips suggest what to ask.
 - **Wall** (`/show`) — full-screen crossfade slideshow of approved derivatives,
   captioned with the prompt + contributor. Stays live by polling `/api/feed`.
-- **Curator** (`/curate`, password-protected) — upload paintings (auto-described by
+- **Curator** (`/curate`, password-protected) — upload drawings (auto-described by
   Claude, QR placard rendered), and approve / hide / feature derivatives.
+
+> The auto-generated **description** and **style** seed every edit instruction
+> (`craftEditInstruction`), so they shape *all* derivatives of a painting. If they're
+> wrong, correct them inline on the painting card in `/curate` — new submissions use the
+> corrected text immediately; regenerate existing derivatives with **Retry**.
 
 ## How a prompt becomes an image
 
@@ -16,10 +21,10 @@ Claude does **not** generate images. The pipeline runs in the background after t
 visitor's request returns (via `ctx.waitUntil` — no Queues needed):
 
 1. Claude (`claude-haiku-4-5`) moderates the audience text.
-2. Claude crafts a strong image-**edit** instruction, seeded by the painting's
+2. Claude crafts a strong image-**edit** instruction, seeded by the drawing's
    auto-generated description + style.
 3. An external image-edit model (`ImageProvider`, default OpenAI `gpt-image-1`)
-   transforms the **original** painting per the instruction.
+   transforms the **original** drawing per the instruction.
 4. Claude vision moderates the output image.
 5. It's stored and — with `AUTO_APPROVE=true` — shown on the wall (artist can veto).
 
@@ -80,7 +85,7 @@ to wait for artist approval before it reaches the wall.
 
 | Var / secret | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Claude (moderation, prompt-crafting, painting description) |
+| `ANTHROPIC_API_KEY` | Claude (moderation, prompt-crafting, drawing description) |
 | `IMAGE_API_KEY` | image-edit provider (OpenAI `gpt-image-1` by default) |
 | `CURATE_PASSWORD` | password for `/curate` (username ignored) |
 | `AUTO_APPROVE` | `"true"` auto-shows AI-passed derivatives; `"false"` requires approval |
