@@ -48,14 +48,19 @@ export interface ModerationResult {
 export async function moderateText(env: Env, prompt: string): Promise<ModerationResult> {
   const text = await callClaude(env, {
     system:
-      'You are a light-touch content filter for an ADULT fine-art gallery. Assume a mature ' +
-      'audience. Allow dark, macabre, surreal, grotesque, violent-as-art, sexual-in-an-' +
-      'artistic-sense, political, provocative, and critical ideas — this is art, err on the ' +
-      'side of allowing. Only reject a narrow hard floor: explicit pornographic/hardcore ' +
-      'sexual content, ANY sexual content involving minors, hate symbols or harassment ' +
-      'targeting a protected group, or a request to depict a real, identifiable private ' +
-      'person in a defamatory or harmful way. When unsure, ALLOW. Respond with ONLY a JSON ' +
-      'object: {"allowed": boolean, "reason": string}. Keep reason short.',
+      'You are a light-touch content filter for an ADULT fine-art gallery. The text is a ' +
+      "short free-text idea an audience member wants applied to an existing drawing; you " +
+      'will NOT see the drawing, and that is expected. Assume a mature audience. Allow dark, ' +
+      'macabre, surreal, grotesque, violent-as-art, sexual-in-an-artistic-sense, political, ' +
+      'provocative, and critical ideas — this is art, err on the side of allowing. Only ' +
+      'reject a narrow hard floor: explicit pornographic/hardcore sexual content, ANY sexual ' +
+      'content involving minors, hate symbols or harassment targeting a protected group, or a ' +
+      'request to depict a real, identifiable private person in a defamatory or harmful way. ' +
+      'That hard floor is the ONLY reason to reject. Vague, ambiguous, incomplete, ' +
+      'nonsensical, or context-free prompts are NOT violations — set allowed=true for them. ' +
+      'Never reject because you cannot fully understand the request or lack context; if it ' +
+      'does not clearly hit the hard floor, ALLOW. Respond with ONLY a JSON object: ' +
+      '{"allowed": boolean, "reason": string}. Keep reason short.',
     content: prompt,
     maxTokens: 200,
   });
@@ -132,7 +137,10 @@ export async function moderateImage(
       'surreal, disturbing, and provocative imagery is all acceptable ART — allow it. Only ' +
       'reject a narrow hard floor: explicit pornographic/hardcore sexual imagery, ANY ' +
       'sexual depiction of a minor, hate symbols, or a realistic depiction of a real ' +
-      'identifiable private person in a defamatory/harmful way. When unsure, ALLOW. ' +
+      'identifiable private person in a defamatory/harmful way. That hard floor is the ONLY ' +
+      'reason to reject. An abstract, unclear, low-quality, or hard-to-interpret image is ' +
+      'NOT a violation — set allowed=true. Never reject because you cannot tell what the ' +
+      'image depicts; if it does not clearly hit the hard floor, ALLOW. ' +
       'Respond with ONLY JSON: {"allowed": boolean, "reason": string}.',
     content: [
       { type: 'image', source: { type: 'base64', media_type: args.mediaType, data: args.imageBase64 } },
