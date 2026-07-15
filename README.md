@@ -8,7 +8,13 @@ derivatives are projected back into the room as a live slideshow.
 - **Wall** (`/show`) — full-screen crossfade slideshow of approved derivatives,
   captioned with the prompt + contributor. Stays live by polling `/api/feed`.
 - **Curator** (`/curate`, password-protected) — upload paintings (auto-described by
-  Claude, QR placard rendered), and approve / hide / feature derivatives.
+  Claude, QR placard rendered), **edit a painting's description + style** when the
+  auto-description is off, and approve / hide / feature derivatives.
+
+> The auto-generated **description** and **style** seed every edit instruction
+> (`craftEditInstruction`), so they shape *all* derivatives of a painting. If they're
+> wrong, correct them inline on the painting card in `/curate` — new submissions use the
+> corrected text immediately; regenerate existing derivatives with **Retry**.
 
 ## How a prompt becomes an image
 

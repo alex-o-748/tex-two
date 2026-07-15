@@ -148,6 +148,26 @@ app.post('/api/curate/upload', async (c) => {
   return c.json({ ok: true, id });
 });
 
+// Edit a painting's auto-generated profile. The description + style seed every
+// future edit instruction, so this is how a curator corrects an off description;
+// new submissions pick it up immediately (existing derivatives via Retry).
+app.post('/api/curate/painting/:id', async (c) => {
+  const id = c.req.param('id');
+  const painting = await db.getPainting(c.env, id);
+  if (!painting) return c.json({ error: 'not found' }, 404);
+  const { description, style_notes } = await c.req.json<{
+    description?: string;
+    style_notes?: string;
+  }>();
+  await db.updatePaintingProfile(
+    c.env,
+    id,
+    String(description ?? '').trim().slice(0, 2000),
+    String(style_notes ?? '').trim().slice(0, 400)
+  );
+  return c.json({ ok: true });
+});
+
 // Approve / hide / retry a submission.
 app.post('/api/curate/submission/:id/:action', async (c) => {
   const id = c.req.param('id');

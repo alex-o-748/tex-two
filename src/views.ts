@@ -259,6 +259,10 @@ export function curatePage(): string {
   .qr a { font-size: 12px; display: block; margin-top: 6px; word-break: break-all; }
   .card.att .badge { margin-top: 0; margin-bottom: 8px; }
   .card.att .q { margin-top: 4px; }
+  .fld { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8a857c; margin-top: 10px; }
+  .fld .hint { text-transform: none; letter-spacing: 0; color: #6c675f; }
+  .fld textarea, .fld input { width: 100%; box-sizing: border-box; margin-top: 5px; font-size: 13px; text-transform: none; letter-spacing: 0; color: #d9d4cc; resize: vertical; }
+  .card .meta .actions { padding: 0; margin-top: 10px; align-items: center; }
 </style>
 
 <script>
@@ -282,11 +286,22 @@ function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 
 async function load() {
   const state = await j('/api/curate/state');
-  document.getElementById('paintings').innerHTML = state.paintings.map(p => \`
+  // Don't clobber a description/style the curator is mid-edit: skip the paintings
+  // re-render while a field inside that grid is focused.
+  const editing = document.activeElement && document.getElementById('paintings').contains(document.activeElement);
+  if (!editing) document.getElementById('paintings').innerHTML = state.paintings.map(p => \`
     <div class="card">
       <img src="/img/\${p.r2_key}" alt="">
       <div class="meta"><div class="q">\${esc(p.title)}</div>
-        <div class="sub">\${esc(p.description || 'no description')}</div></div>
+        <label class="fld">Description <span class="hint">(seeds every derivative)</span>
+          <textarea id="desc-\${p.id}" rows="4">\${esc(p.description || '')}</textarea></label>
+        <label class="fld">Style
+          <input id="style-\${p.id}" value="\${esc(p.style_notes || '')}"></label>
+        <div class="actions">
+          <button class="on" onclick="savePainting('\${p.id}')">Save</button>
+          <span class="sub" id="pstatus-\${p.id}"></span>
+        </div>
+      </div>
       <div class="qr">\${p.qr}<a href="\${esc(p.submit_url)}" target="_blank">\${esc(p.submit_url)}</a></div>
     </div>\`).join('') || '<p class="sub">No paintings yet.</p>';
 
@@ -328,6 +343,17 @@ async function load() {
   }).join('') || '<p class="sub">No derivatives yet.</p>';
 }
 
+window.savePainting = async (id) => {
+  const status = document.getElementById('pstatus-' + id);
+  const description = document.getElementById('desc-' + id).value;
+  const style_notes = document.getElementById('style-' + id).value;
+  status.textContent = 'saving…';
+  try {
+    await j('/api/curate/painting/' + id, { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ description, style_notes }) });
+    status.textContent = 'saved · new submissions use this';
+    document.activeElement && document.activeElement.blur();
+  } catch (err) { status.textContent = 'error: ' + err.message; }
+};
 window.act = async (submissionId, action) => { await j('/api/curate/submission/' + submissionId + '/' + action, { method: 'POST' }); load(); };
 window.feature = async (derivativeId, on) => { await j('/api/curate/derivative/' + derivativeId + '/feature', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ featured: !!on }) }); load(); };
 
