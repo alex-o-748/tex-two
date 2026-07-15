@@ -134,6 +134,7 @@ export function showPage(): string {
   #caption .q { font-size: 30px; line-height: 1.3; margin: 0; color: #fff;
     text-shadow: 0 2px 12px rgba(0,0,0,.7); font-family: Georgia, serif; font-style: italic; }
   #caption .who { margin-top: 10px; font-size: 16px; color: #e8b06a; letter-spacing: .04em; }
+  #caption .ts { margin-top: 6px; font-size: 13px; color: #8a857c; letter-spacing: .04em; }
   #empty { position: fixed; inset: 0; display: grid; place-items: center;
     color: #555; font-size: 20px; font-family: Georgia, serif; }
 </style>
@@ -143,22 +144,37 @@ export function showPage(): string {
   const cap = document.getElementById('caption');
   const empty = document.getElementById('empty');
   const HOLD = 8000, POLL = 5000;
-  let playlist = [], idx = 0, current = null;
+  // One projector, all approved derivatives together: pool holds every item;
+  // queue is a shuffled play order that reshuffles each time it's exhausted.
+  let pool = [], queue = [], current = null;
 
-  function sameSet(a, b) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) if (a[i].id !== b[i].id) return false;
-    return true;
+  function idsOf(items) { return items.map((x) => x.id).sort().join(','); }
+
+  function shuffle(items) {
+    const a = items.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
   }
 
   async function refresh() {
     try {
       const items = await (await fetch('/api/feed')).json();
-      if (!sameSet(items, playlist)) {
-        playlist = items;
-        if (idx >= playlist.length) idx = 0;
+      // Only rebuild when the set of images actually changes, so a poll doesn't
+      // interrupt the current shuffled run mid-cycle.
+      if (idsOf(items) !== idsOf(pool)) {
+        pool = items;
+        queue = []; // reshuffle from the fresh pool on the next tick
       }
     } catch (e) { /* keep showing what we have */ }
+  }
+
+  function fmtTime(ts) {
+    if (!ts) return '';
+    try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    catch (e) { return ''; }
   }
 
   function show(item) {
@@ -168,8 +184,10 @@ export function showPage(): string {
     slide.style.backgroundImage = 'url("/img/' + item.derivative_key + '")';
     stage.appendChild(slide);
     requestAnimationFrame(() => requestAnimationFrame(() => slide.classList.add('on')));
+    const when = fmtTime(item.created_at);
     cap.innerHTML = '<p class="q">&ldquo;' + escapeHtml(item.prompt_text) + '&rdquo;</p>' +
-      (item.contributor_name ? '<div class="who">&mdash; ' + escapeHtml(item.contributor_name) + '</div>' : '');
+      (item.contributor_name ? '<div class="who">&mdash; ' + escapeHtml(item.contributor_name) + '</div>' : '') +
+      (when ? '<div class="ts">generated ' + escapeHtml(when) + '</div>' : '');
     cap.classList.add('on');
     const prev = current;
     current = slide;
@@ -177,14 +195,13 @@ export function showPage(): string {
   }
 
   function tick() {
-    if (playlist.length === 0) {
+    if (pool.length === 0) {
       empty.style.display = 'grid';
       cap.classList.remove('on');
       return;
     }
-    if (idx >= playlist.length) idx = 0;
-    show(playlist[idx]);
-    idx++;
+    if (queue.length === 0) queue = shuffle(pool);
+    show(queue.shift());
   }
 
   function escapeHtml(s) {
@@ -279,6 +296,7 @@ upForm.addEventListener('submit', async (e) => {
 });
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function fmtTime(ts){ if(!ts) return ''; try { return new Date(ts).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e){ return ''; } }
 
 async function load() {
   const state = await j('/api/curate/state');
@@ -314,6 +332,7 @@ async function load() {
       <div class="meta">
         <div class="q">&ldquo;\${esc(d.prompt_text)}&rdquo;</div>
         <div class="sub">\${esc(d.contributor_name || 'anonymous')} · \${esc(d.painting_title)}</div>
+        \${d.created_at ? \`<div class="sub">generated \${esc(fmtTime(d.created_at))}</div>\` : ''}
         <span class="badge b-\${d.status}">\${d.status}</span>
         \${d.featured ? '<span class="badge b-approved">featured</span>' : ''}
       </div>
