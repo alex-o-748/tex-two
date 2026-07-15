@@ -10,6 +10,11 @@ derivatives are projected back into the room as a live slideshow.
 - **Curator** (`/curate`, password-protected) — upload drawings (auto-described by
   Claude, QR placard rendered), and approve / hide / feature derivatives.
 
+> The auto-generated **description** and **style** seed every edit instruction
+> (`craftEditInstruction`), so they shape *all* derivatives of a painting. If they're
+> wrong, correct them inline on the painting card in `/curate` — new submissions use the
+> corrected text immediately; regenerate existing derivatives with **Retry**.
+
 ## How a prompt becomes an image
 
 Claude does **not** generate images. The pipeline runs in the background after the

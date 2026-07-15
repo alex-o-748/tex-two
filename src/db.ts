@@ -23,6 +23,23 @@ export async function listDrawings(env: Env): Promise<Drawing[]> {
   return r.results ?? [];
 }
 
+/**
+ * Curator edit of a painting's profile. The description + style seed every future
+ * edit instruction (see craftEditInstruction), so correcting an off auto-description
+ * here fixes all subsequent derivatives for this painting. Empty strings are stored
+ * as NULL so the prompt falls back to its "(no description)" placeholder.
+ */
+export async function updatePaintingProfile(
+  env: Env,
+  id: string,
+  description: string | null,
+  styleNotes: string | null
+): Promise<void> {
+  await env.DB.prepare(`UPDATE paintings SET description = ?, style_notes = ? WHERE id = ?`)
+    .bind(description || null, styleNotes || null, id)
+    .run();
+}
+
 // ---- Submissions ----
 
 export async function insertSubmission(
