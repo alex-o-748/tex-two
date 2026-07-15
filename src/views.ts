@@ -34,17 +34,21 @@ const HINTS = [
   'turn it into a dream',
 ];
 
-export function submitPage(drawing: Drawing): string {
+export function submitPage(drawing: Drawing, error = ''): string {
   const imgUrl = `/img/${drawing.r2_key}`;
+  const ext = drawing.media_type === 'image/jpeg' ? 'jpg' : 'png';
+  const downloadName = `${drawing.title.replace(/[^\w.-]+/g, '-').slice(0, 60) || 'drawing'}.${ext}`;
   const chips = HINTS.map(
     (h) => `<button type="button" class="chip" data-hint="${escapeHtml(h)}">${escapeHtml(h)}</button>`
   ).join('');
+  const errorBanner = error ? `<p class="error">${escapeHtml(error)}</p>` : '';
   const body = `
 <main class="wrap">
   <figure>
     <img src="${imgUrl}" alt="${escapeHtml(drawing.title)}">
     <figcaption>${escapeHtml(drawing.title)}</figcaption>
   </figure>
+  ${errorBanner}
   <h1>Reshape this drawing</h1>
   <p class="lede">Leave your idea &mdash; add, remove, or reimagine. The artwork will be
      transformed from your words and projected in this room.</p>
@@ -55,12 +59,28 @@ export function submitPage(drawing: Drawing): string {
     <input name="name" maxlength="40" placeholder="your name (optional)">
     <button type="submit" class="go">Send my idea</button>
   </form>
+
+  <div class="or"><span>or edit it yourself</span></div>
+
+  <section class="diy">
+    <p class="lede">Prefer your own hands? Download the drawing, edit it however you like
+       &mdash; paint, collage, cut, redraw &mdash; then upload your version to the wall.</p>
+    <a class="download" href="${imgUrl}" download="${escapeHtml(downloadName)}">&#8681;&nbsp; Download drawing</a>
+    <form method="post" action="/p/${drawing.id}/upload" enctype="multipart/form-data" id="u">
+      <input type="file" name="image" accept="image/png,image/jpeg" required>
+      <input name="caption" maxlength="400" placeholder="what did you do? (optional)">
+      <input name="name" maxlength="40" placeholder="your name (optional)">
+      <button type="submit" class="go">Upload my version</button>
+    </form>
+  </section>
 </main>
 <style>
   .wrap { max-width: 560px; margin: 0 auto; padding: 20px 18px 48px; }
   figure { margin: 0 0 20px; }
   figure img { width: 100%; border-radius: 14px; display: block; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
   figcaption { margin-top: 10px; color: #a8a29a; font-size: 14px; letter-spacing: .02em; }
+  .error { background: #3a1717; color: #e88a8a; border: 1px solid #5a2626; border-radius: 12px;
+    padding: 12px 14px; margin: 0 0 16px; font-size: 14px; }
   h1 { font-size: 26px; margin: 8px 0 6px; }
   .lede { color: #b7b2aa; margin: 0 0 18px; line-height: 1.5; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -73,11 +93,19 @@ export function submitPage(drawing: Drawing): string {
     width: 100%; background: #131218; color: #ece9e4; border: 1px solid #2f2c38;
     border-radius: 12px; padding: 14px; font-size: 16px; margin-bottom: 12px; resize: vertical;
   }
+  input[type=file] { padding: 11px 14px; }
   textarea:focus, input:focus { outline: none; border-color: #e8b06a; }
   .go {
     width: 100%; background: #e8b06a; color: #1a1206; border: 0; border-radius: 12px;
     padding: 15px; font-size: 17px; font-weight: 600;
   }
+  .or { display: flex; align-items: center; gap: 14px; color: #6c675f; font-size: 13px;
+    text-transform: uppercase; letter-spacing: .08em; margin: 28px 0 20px; }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: #2f2c38; }
+  .download { display: inline-block; text-decoration: none; color: #e8b06a;
+    border: 1px solid #3a3543; border-radius: 12px; padding: 12px 16px; font-weight: 600;
+    margin-bottom: 16px; }
+  .download:active { background: #1c1a22; }
 </style>
 <script>
   const p = document.getElementById('prompt');
@@ -90,15 +118,22 @@ export function submitPage(drawing: Drawing): string {
   return layout(`Reshape &mdash; ${drawing.title}`, body);
 }
 
-export function confirmationPage(drawing: Drawing): string {
+export function confirmationPage(drawing: Drawing, mode: 'prompt' | 'upload' = 'prompt'): string {
+  const heading = mode === 'upload' ? 'Your version is on its way&hellip;' : 'Your idea is being drawn&hellip;';
+  const lead =
+    mode === 'upload'
+      ? `Watch the wall &mdash; your edit of <em>${escapeHtml(drawing.title)}</em>
+         will appear there shortly, once it clears a quick safety check.`
+      : `Watch the wall &mdash; your transformation of <em>${escapeHtml(drawing.title)}</em>
+         will appear there shortly, once it clears a quick safety check.`;
+  const again = mode === 'upload' ? 'Add another version' : 'Leave another idea';
   const body = `
 <main class="wrap">
   <div class="card">
     <div class="spark">&#10022;</div>
-    <h1>Your idea is being drawn&hellip;</h1>
-    <p>Watch the wall &mdash; your transformation of <em>${escapeHtml(drawing.title)}</em>
-       will appear there shortly, once it clears a quick safety check.</p>
-    <a class="again" href="/p/${drawing.id}">Leave another idea</a>
+    <h1>${heading}</h1>
+    <p>${lead}</p>
+    <a class="again" href="/p/${drawing.id}">${again}</a>
   </div>
 </main>
 <style>
@@ -295,10 +330,10 @@ function fmtTime(ts){ if(!ts) return ''; try { return new Date(ts).toLocaleStrin
 
 async function load() {
   const state = await j('/api/curate/state');
-  // Don't clobber a description/style the curator is mid-edit: skip the paintings
+  // Don't clobber a description/style the curator is mid-edit: skip the drawings
   // re-render while a field inside that grid is focused.
-  const editing = document.activeElement && document.getElementById('paintings').contains(document.activeElement);
-  if (!editing) document.getElementById('paintings').innerHTML = state.paintings.map(p => \`
+  const editing = document.activeElement && document.getElementById('drawings').contains(document.activeElement);
+  if (!editing) document.getElementById('drawings').innerHTML = state.drawings.map(p => \`
     <div class="card">
       <img src="/img/\${p.r2_key}" alt="">
       <div class="meta"><div class="q">\${esc(p.title)}</div>

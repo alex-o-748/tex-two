@@ -30,11 +30,17 @@ export type SubmissionStatus =
   | 'approved'
   | 'hidden';
 
+// How the derivative is produced:
+//   'prompt' — AI transforms the original drawing from the visitor's words.
+//   'upload' — the visitor edited the drawing themselves and uploaded their version.
+export type SubmissionKind = 'prompt' | 'upload';
+
 export interface Submission {
   id: string;
   drawing_id: string;
   prompt_text: string;
   contributor_name: string | null;
+  kind: SubmissionKind;
   status: SubmissionStatus;
   moderation_reason: string | null;
   attempts: number;

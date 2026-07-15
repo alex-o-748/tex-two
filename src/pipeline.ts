@@ -1,4 +1,4 @@
-import type { Env } from './types';
+import type { Env, Submission } from './types';
 import * as db from './db';
 import { moderateText, craftEditInstruction, moderateImage } from './claude';
 import { imageProvider } from './imageProvider';
@@ -21,6 +21,12 @@ export async function processSubmission(env: Env, submissionId: string): Promise
   const sub = await db.getSubmission(env, submissionId);
   if (!sub) return;
   const skipModeration = sub.override === 1;
+
+  // Visitor-edited uploads take a separate, no-AI path: the image is already
+  // stored (at upload time), so we only moderate it and gate it.
+  if (sub.kind === 'upload') {
+    return processUpload(env, sub, skipModeration);
+  }
 
   // Fresh generation: clear any prior derivative for this submission (retry /
   // override-regenerate) so we never leave a duplicate image behind.
@@ -89,6 +95,47 @@ export async function processSubmission(env: Env, submissionId: string): Promise
   }
 
   // 6. Hybrid gate.
+  const autoApprove = env.AUTO_APPROVE !== 'false';
+  await db.setSubmissionStatus(env, sub.id, autoApprove ? 'approved' : 'pending_review');
+}
+
+/**
+ * Visitor-edited upload path (no AI): the image the visitor uploaded is already
+ * stored as this submission's derivative. There is nothing to generate, so we
+ * only moderate the caption + the uploaded image, then apply the same hybrid gate
+ * as the AI path. The stored image is never deleted here, so a cron re-run just
+ * re-moderates it (we can't re-fetch the visitor's original upload).
+ */
+async function processUpload(env: Env, sub: Submission, skipModeration: boolean): Promise<void> {
+  const deriv = await db.getDerivativeForSubmission(env, sub.id);
+  if (!deriv) {
+    await db.setSubmissionStatus(env, sub.id, 'rejected', 'uploaded image missing');
+    return;
+  }
+
+  if (!skipModeration) {
+    // The caption is shown on the wall, so it goes through the same text filter.
+    const textCheck = await moderateText(env, sub.prompt_text);
+    if (!textCheck.allowed) {
+      await db.setSubmissionStatus(env, sub.id, 'rejected', textCheck.reason || 'caption blocked');
+      return;
+    }
+
+    const obj = await env.BUCKET.get(deriv.r2_key);
+    if (!obj) {
+      await db.setSubmissionStatus(env, sub.id, 'rejected', 'uploaded image missing');
+      return;
+    }
+    const imgCheck = await moderateImage(env, {
+      imageBase64: bufferToBase64(await obj.arrayBuffer()),
+      mediaType: deriv.media_type,
+    });
+    if (!imgCheck.allowed) {
+      await db.setSubmissionStatus(env, sub.id, 'rejected', imgCheck.reason || 'image blocked');
+      return;
+    }
+  }
+
   const autoApprove = env.AUTO_APPROVE !== 'false';
   await db.setSubmissionStatus(env, sub.id, autoApprove ? 'approved' : 'pending_review');
 }
