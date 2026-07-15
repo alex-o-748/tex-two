@@ -35,21 +35,21 @@ export async function processSubmission(env: Env, submissionId: string): Promise
     }
   }
 
-  const painting = await db.getPainting(env, sub.painting_id);
-  if (!painting) {
-    await db.setSubmissionStatus(env, sub.id, 'rejected', 'painting missing');
+  const drawing = await db.getDrawing(env, sub.drawing_id);
+  if (!drawing) {
+    await db.setSubmissionStatus(env, sub.id, 'rejected', 'drawing missing');
     return;
   }
 
-  // 2. Craft a strong edit instruction seeded by the painting profile.
+  // 2. Craft a strong edit instruction seeded by the drawing profile.
   const instruction = await craftEditInstruction(env, {
     prompt: sub.prompt_text,
-    description: painting.description,
-    styleNotes: painting.style_notes,
+    description: drawing.description,
+    styleNotes: drawing.style_notes,
   });
 
   // 3. Fetch the original from R2 and edit it.
-  const original = await env.BUCKET.get(painting.r2_key);
+  const original = await env.BUCKET.get(drawing.r2_key);
   if (!original) {
     await db.setSubmissionStatus(env, sub.id, 'rejected', 'original image missing');
     return;
@@ -57,7 +57,7 @@ export async function processSubmission(env: Env, submissionId: string): Promise
   const originalBytes = await original.arrayBuffer();
   const edited = await imageProvider.edit(env, {
     imageBytes: originalBytes,
-    mediaType: painting.media_type,
+    mediaType: drawing.media_type,
     instruction,
   });
 
@@ -70,7 +70,7 @@ export async function processSubmission(env: Env, submissionId: string): Promise
   await db.insertDerivative(env, {
     id: derivativeId,
     submission_id: sub.id,
-    painting_id: sub.painting_id,
+    drawing_id: sub.drawing_id,
     r2_key: key,
     media_type: edited.mediaType,
     crafted_prompt: instruction,

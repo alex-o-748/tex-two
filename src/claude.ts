@@ -75,14 +75,14 @@ export async function craftEditInstruction(
   const instruction = await callClaude(env, {
     system:
       'You write concise image-editing instructions for an AI image editor. The editor ' +
-      'receives the ORIGINAL painting plus your instruction, and must transform it while ' +
-      "keeping the painting's identity and medium recognizable. Given a description of the " +
-      "original painting, its style, and an audience member's idea, output ONE vivid, " +
+      'receives the ORIGINAL drawing plus your instruction, and must transform it while ' +
+      "keeping the drawing's identity and medium recognizable. Given a description of the " +
+      "original drawing, its style, and an audience member's idea, output ONE vivid, " +
       'concrete edit instruction (1-3 sentences). Preserve the original composition and ' +
-      'painterly style unless the idea explicitly asks to change them. Do not add text, ' +
+      'drawing style unless the idea explicitly asks to change them. Do not add text, ' +
       'watermarks, or unsafe content. Output only the instruction, no preamble.',
     content:
-      `ORIGINAL PAINTING: ${args.description ?? '(no description)'}\n` +
+      `ORIGINAL DRAWING: ${args.description ?? '(no description)'}\n` +
       `STYLE: ${args.styleNotes ?? '(unknown)'}\n` +
       `AUDIENCE IDEA: ${args.prompt}`,
     maxTokens: 300,
@@ -90,30 +90,30 @@ export async function craftEditInstruction(
   return instruction || args.prompt;
 }
 
-export interface PaintingProfile {
+export interface DrawingProfile {
   description: string;
   styleNotes: string;
 }
 
-/** One-time vision pass at setup: describe a painting so later prompts can be seeded. */
-export async function describePainting(
+/** One-time vision pass at setup: describe a drawing so later prompts can be seeded. */
+export async function describeDrawing(
   env: Env,
   args: { imageBase64: string; mediaType: string; title: string }
-): Promise<PaintingProfile> {
+): Promise<DrawingProfile> {
   const text = await callClaude(env, {
     system:
-      'You are an art curator. Given a painting image and its title, respond with ONLY a ' +
+      'You are an art curator. Given a drawing image and its title, respond with ONLY a ' +
       'JSON object: {"description": string, "styleNotes": string}. "description" is 2-3 ' +
       'sentences capturing subject, setting, mood, and notable elements. "styleNotes" is a ' +
-      'short phrase for medium/technique/palette (e.g. "loose impressionist oil, warm ' +
-      'ochre palette").',
+      'short phrase for medium/technique/palette (e.g. "loose graphite sketch, warm ' +
+      'ochre wash").',
     content: [
       { type: 'image', source: { type: 'base64', media_type: args.mediaType, data: args.imageBase64 } },
       { type: 'text', text: `Title: ${args.title}` },
     ],
     maxTokens: 400,
   });
-  const parsed = extractJson<PaintingProfile>(text);
+  const parsed = extractJson<DrawingProfile>(text);
   return {
     description: parsed?.description ?? '',
     styleNotes: parsed?.styleNotes ?? '',

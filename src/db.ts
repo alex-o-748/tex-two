@@ -1,25 +1,25 @@
-import type { Env, Painting, Submission, SubmissionStatus, Derivative } from './types';
+import type { Env, Drawing, Submission, SubmissionStatus, Derivative } from './types';
 
-// ---- Paintings ----
+// ---- Drawings ----
 
-export async function insertPainting(
+export async function insertDrawing(
   env: Env,
-  p: Pick<Painting, 'id' | 'title' | 'r2_key' | 'media_type' | 'description' | 'style_notes'>
+  p: Pick<Drawing, 'id' | 'title' | 'r2_key' | 'media_type' | 'description' | 'style_notes'>
 ): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO paintings (id, title, r2_key, media_type, description, style_notes, created_at)
+    `INSERT INTO drawings (id, title, r2_key, media_type, description, style_notes, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(p.id, p.title, p.r2_key, p.media_type, p.description, p.style_notes, Date.now())
     .run();
 }
 
-export async function getPainting(env: Env, id: string): Promise<Painting | null> {
-  return env.DB.prepare(`SELECT * FROM paintings WHERE id = ?`).bind(id).first<Painting>();
+export async function getDrawing(env: Env, id: string): Promise<Drawing | null> {
+  return env.DB.prepare(`SELECT * FROM drawings WHERE id = ?`).bind(id).first<Drawing>();
 }
 
-export async function listPaintings(env: Env): Promise<Painting[]> {
-  const r = await env.DB.prepare(`SELECT * FROM paintings ORDER BY created_at ASC`).all<Painting>();
+export async function listDrawings(env: Env): Promise<Drawing[]> {
+  const r = await env.DB.prepare(`SELECT * FROM drawings ORDER BY created_at ASC`).all<Drawing>();
   return r.results ?? [];
 }
 
@@ -44,13 +44,13 @@ export async function updatePaintingProfile(
 
 export async function insertSubmission(
   env: Env,
-  s: Pick<Submission, 'id' | 'painting_id' | 'prompt_text' | 'contributor_name'>
+  s: Pick<Submission, 'id' | 'drawing_id' | 'prompt_text' | 'contributor_name'>
 ): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO submissions (id, painting_id, prompt_text, contributor_name, status, created_at)
+    `INSERT INTO submissions (id, drawing_id, prompt_text, contributor_name, status, created_at)
      VALUES (?, ?, ?, ?, 'queued', ?)`
   )
-    .bind(s.id, s.painting_id, s.prompt_text, s.contributor_name, Date.now())
+    .bind(s.id, s.drawing_id, s.prompt_text, s.contributor_name, Date.now())
     .run();
 }
 
@@ -201,23 +201,23 @@ export async function listNeedsAttention(env: Env): Promise<AttentionItem[]> {
 
 export async function insertDerivative(
   env: Env,
-  d: Pick<Derivative, 'id' | 'submission_id' | 'painting_id' | 'r2_key' | 'media_type' | 'crafted_prompt'>
+  d: Pick<Derivative, 'id' | 'submission_id' | 'drawing_id' | 'r2_key' | 'media_type' | 'crafted_prompt'>
 ): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO derivatives
-       (id, submission_id, painting_id, r2_key, media_type, crafted_prompt, featured, sort_order, created_at)
+       (id, submission_id, drawing_id, r2_key, media_type, crafted_prompt, featured, sort_order, created_at)
      VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)`
   )
-    .bind(d.id, d.submission_id, d.painting_id, d.r2_key, d.media_type, d.crafted_prompt, Date.now())
+    .bind(d.id, d.submission_id, d.drawing_id, d.r2_key, d.media_type, d.crafted_prompt, Date.now())
     .run();
 }
 
-/** A derivative joined with its submission + painting, for the wall and dashboard. */
+/** A derivative joined with its submission + drawing, for the wall and dashboard. */
 export interface FeedItem {
   id: string;
   submission_id: string;
-  painting_id: string;
-  painting_title: string;
+  drawing_id: string;
+  drawing_title: string;
   original_key: string;
   derivative_key: string;
   prompt_text: string;
@@ -229,14 +229,14 @@ export interface FeedItem {
 }
 
 const FEED_SELECT = `
-  SELECT d.id, d.submission_id, d.painting_id,
-         p.title AS painting_title, p.r2_key AS original_key,
+  SELECT d.id, d.submission_id, d.drawing_id,
+         p.title AS drawing_title, p.r2_key AS original_key,
          d.r2_key AS derivative_key,
          s.prompt_text, s.contributor_name, s.status,
          d.featured, d.sort_order, d.created_at
   FROM derivatives d
   JOIN submissions s ON s.id = d.submission_id
-  JOIN paintings   p ON p.id = d.painting_id`;
+  JOIN drawings    p ON p.id = d.drawing_id`;
 
 /** Approved, visible derivatives for the projection wall. */
 export async function listApproved(env: Env): Promise<FeedItem[]> {
