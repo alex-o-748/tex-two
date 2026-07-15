@@ -123,7 +123,7 @@ export function confirmationPage(drawing: Drawing, mode: 'prompt' | 'upload' = '
   const lead =
     mode === 'upload'
       ? `Watch the wall &mdash; your edit of <em>${escapeHtml(drawing.title)}</em>
-         will appear there shortly, once it clears a quick safety check.`
+         will appear there once a curator reviews and approves it.`
       : `Watch the wall &mdash; your transformation of <em>${escapeHtml(drawing.title)}</em>
          will appear there shortly, once it clears a quick safety check.`;
   const again = mode === 'upload' ? 'Add another version' : 'Leave another idea';

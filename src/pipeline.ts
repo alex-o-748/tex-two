@@ -102,9 +102,13 @@ export async function processSubmission(env: Env, submissionId: string): Promise
 /**
  * Visitor-edited upload path (no AI): the image the visitor uploaded is already
  * stored as this submission's derivative. There is nothing to generate, so we
- * only moderate the caption + the uploaded image, then apply the same hybrid gate
- * as the AI path. The stored image is never deleted here, so a cron re-run just
- * re-moderates it (we can't re-fetch the visitor's original upload).
+ * moderate the caption + the uploaded image, then hand it to the curator. The
+ * stored image is never deleted here, so a cron re-run just re-moderates it
+ * (we can't re-fetch the visitor's original upload).
+ *
+ * Unlike the AI path, an upload is NEVER auto-published: even with AUTO_APPROVE
+ * on, a hand-uploaded image is arbitrary visitor content, so it always lands in
+ * `pending_review` for an explicit curator approval before it can reach the wall.
  */
 async function processUpload(env: Env, sub: Submission, skipModeration: boolean): Promise<void> {
   const deriv = await db.getDerivativeForSubmission(env, sub.id);
@@ -136,6 +140,6 @@ async function processUpload(env: Env, sub: Submission, skipModeration: boolean)
     }
   }
 
-  const autoApprove = env.AUTO_APPROVE !== 'false';
-  await db.setSubmissionStatus(env, sub.id, autoApprove ? 'approved' : 'pending_review');
+  // Always require an explicit curator approval — uploads are never auto-published.
+  await db.setSubmissionStatus(env, sub.id, 'pending_review');
 }
