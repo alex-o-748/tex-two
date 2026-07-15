@@ -12,7 +12,8 @@ derivatives are projected back into the room as a live slideshow.
 
 ## How a prompt becomes an image
 
-Claude does **not** generate images. The pipeline (a Cloudflare Queue consumer) is:
+Claude does **not** generate images. The pipeline runs in the background after the
+visitor's request returns (via `ctx.waitUntil` — no Queues needed):
 
 1. Claude (`claude-haiku-4-5`) moderates the audience text.
 2. Claude crafts a strong image-**edit** instruction, seeded by the painting's
@@ -22,22 +23,36 @@ Claude does **not** generate images. The pipeline (a Cloudflare Queue consumer) 
 4. Claude vision moderates the output image.
 5. It's stored and — with `AUTO_APPROVE=true` — shown on the wall (artist can veto).
 
+Moderation is a **light-touch adult-gallery** filter (`src/claude.ts`): dark, macabre,
+surreal, and provocative art passes; only a narrow hard floor is auto-blocked (explicit
+sexual content, sexual content involving minors, hate symbols, or harmful depictions of a
+real identifiable person). A flagged derivative is still generated and stored, and the
+curator can **Approve anyway** from the "Needs attention" panel — which publishes it to the
+wall (setting an `override` flag that also bypasses the filter on regeneration). Tune the
+policy in the two moderation prompts in `src/claude.ts`.
+
+Generation runs on the submit request via `ctx.waitUntil` (fast path), with a
+**Cron Trigger** (every minute) as a durable backstop: it recovers jobs whose worker
+was evicted mid-run and retries transient failures (up to 3×). Blocked or failed
+submissions surface in a **Needs attention** section on `/curate` with a **Retry**
+button, so nothing fails silently.
+
 ## Stack
 
-Cloudflare Workers (Hono) · D1 (SQLite) · R2 (images) · Queues (pipeline) · Wrangler.
+Cloudflare Workers (Hono) · D1 (SQLite) · R2 (images) · Wrangler. Runs on the
+Workers **free** plan — the generation pipeline runs in-request via `ctx.waitUntil`,
+so no Queues (and no paid plan) are required.
 
 ## Setup
 
 ```sh
 npm install
 
-# One-time Cloudflare resources
+# One-time Cloudflare resources (R2 must be enabled once in the dashboard)
 wrangler d1 create tex-two-db          # paste database_id into wrangler.jsonc
 wrangler r2 bucket create tex-two-images
-wrangler queues create art-gen-queue
-wrangler queues create art-gen-dlq     # dead-letter for exhausted retries
 
-# Schema
+# Schema (applies all migrations in ./migrations)
 npm run db:migrate                     # (or db:migrate:local for local dev)
 
 # Secrets

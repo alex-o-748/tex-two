@@ -31,7 +31,13 @@ export const openaiProvider: ImageProvider = {
     const form = new FormData();
     form.append('model', 'gpt-image-1');
     form.append('prompt', req.instruction);
-    form.append('size', '1024x1024');
+    // 'auto' matches the source aspect ratio (paintings are usually landscape) so the
+    // edit extends the scene instead of cropping it into a square and distorting it.
+    form.append('size', 'auto');
+    // Preserve the original painting's style, palette, and structure.
+    form.append('input_fidelity', 'high');
+    // Higher render tier — sharper, less muddy output.
+    form.append('quality', 'high');
     form.append(
       'image',
       new Blob([req.imageBytes], { type: req.mediaType }),
@@ -42,6 +48,7 @@ export const openaiProvider: ImageProvider = {
       method: 'POST',
       headers: { authorization: `Bearer ${env.IMAGE_API_KEY}` },
       body: form,
+      signal: AbortSignal.timeout(120_000),
     });
     if (!res.ok) {
       throw new Error(`image provider ${res.status}: ${await res.text()}`);

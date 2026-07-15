@@ -1,14 +1,18 @@
 {
   // Cloudflare Worker config for the interactive art installation.
   // Run `wrangler d1 create tex-two-db` and paste the returned id below,
-  // then `wrangler r2 bucket create tex-two-images` and
-  // `wrangler queues create art-gen-queue`.
+  // then `wrangler r2 bucket create tex-two-images`.
+  // (No Queues: the generation pipeline runs in-request via ctx.waitUntil,
+  //  so this stays on the Workers free plan.)
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tex-two",
   "main": "src/index.ts",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Cron backstop for the generation pipeline: reaps stuck jobs and processes
+  // any still-queued submissions once a minute (free plan; no Queues needed).
+  "triggers": { "crons": ["* * * * *"] },
   "vars": {
     // "true" = AI-passed derivatives appear on the wall automatically (artist can veto).
     // "false" = every derivative waits for artist approval before it shows.
@@ -21,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "tex-two-db",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "93ba745f-cfca-40d0-a025-ee48416cb866",
       "migrations_dir": "migrations"
     }
   ],
@@ -30,22 +34,5 @@
       "binding": "BUCKET",
       "bucket_name": "tex-two-images"
     }
-  ],
-  "queues": {
-    "producers": [
-      {
-        "binding": "GEN_QUEUE",
-        "queue": "art-gen-queue"
-      }
-    ],
-    "consumers": [
-      {
-        "queue": "art-gen-queue",
-        "max_batch_size": 3,
-        "max_batch_timeout": 5,
-        "max_retries": 3,
-        "dead_letter_queue": "art-gen-dlq"
-      }
-    ]
-  }
+  ]
 }

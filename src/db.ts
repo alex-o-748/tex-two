@@ -52,6 +52,134 @@ export async function setSubmissionStatus(
     .run();
 }
 
+/**
+ * Atomically claim a queued submission for processing. Flips it to `generating`,
+ * stamps `claimed_at`, and bumps `attempts` — but only if it's still `queued`, so
+ * the waitUntil fast-path and the cron backstop can never process the same row.
+ * Returns true if this caller won the claim.
+ */
+export async function claimSubmission(env: Env, id: string): Promise<boolean> {
+  const r = await env.DB.prepare(
+    `UPDATE submissions
+        SET status = 'generating', claimed_at = ?, attempts = attempts + 1
+      WHERE id = ? AND status = 'queued'`
+  )
+    .bind(Date.now(), id)
+    .run();
+  return (r.meta.changes ?? 0) === 1;
+}
+
+const STUCK_MS = 180_000; // a claim older than this with no result is considered dead
+const MAX_ATTEMPTS = 3;
+
+/**
+ * Recover jobs whose worker was evicted mid-pipeline (stuck in `generating`).
+ * Exhausted ones (>= MAX_ATTEMPTS) are marked rejected; the rest are re-queued.
+ */
+export async function reapStuck(env: Env): Promise<void> {
+  const cutoff = Date.now() - STUCK_MS;
+  // A fresh claim always stamps claimed_at atomically, so a `generating` row with
+  // NULL claimed_at is a legacy/orphaned job — treat it as stuck too.
+  await env.DB.prepare(
+    `UPDATE submissions
+        SET status = 'rejected', moderation_reason = 'generation failed after retries'
+      WHERE status = 'generating' AND (claimed_at IS NULL OR claimed_at < ?) AND attempts >= ?`
+  )
+    .bind(cutoff, MAX_ATTEMPTS)
+    .run();
+  await env.DB.prepare(
+    `UPDATE submissions
+        SET status = 'queued', claimed_at = NULL
+      WHERE status = 'generating' AND (claimed_at IS NULL OR claimed_at < ?) AND attempts < ?`
+  )
+    .bind(cutoff, MAX_ATTEMPTS)
+    .run();
+}
+
+/** IDs of submissions waiting to be processed, oldest first. */
+export async function listQueuedIds(env: Env, limit: number): Promise<string[]> {
+  const r = await env.DB.prepare(
+    `SELECT id FROM submissions WHERE status = 'queued' ORDER BY created_at ASC LIMIT ?`
+  )
+    .bind(limit)
+    .all<{ id: string }>();
+  return (r.results ?? []).map((row) => row.id);
+}
+
+/** Put a failed/blocked submission back in line, from the dashboard. */
+export async function retrySubmission(env: Env, id: string): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE submissions
+        SET status = 'queued', attempts = 0, claimed_at = NULL, moderation_reason = NULL
+      WHERE id = ?`
+  )
+    .bind(id)
+    .run();
+}
+
+/**
+ * Curator override: publish a filter-rejected submission anyway.
+ * - If a derivative already exists (image-stage rejection), just approve it — the
+ *   image is already generated, no need to re-run the pipeline.
+ * - Otherwise (text-stage rejection, no image yet) re-queue with override=1 so the
+ *   pipeline regenerates while skipping both moderation steps.
+ */
+export async function approveAnyway(env: Env, id: string): Promise<void> {
+  const existing = await env.DB.prepare(
+    `SELECT id FROM derivatives WHERE submission_id = ? LIMIT 1`
+  )
+    .bind(id)
+    .first<{ id: string }>();
+  if (existing) {
+    await env.DB.prepare(
+      `UPDATE submissions SET status = 'approved', override = 1 WHERE id = ?`
+    )
+      .bind(id)
+      .run();
+  } else {
+    await env.DB.prepare(
+      `UPDATE submissions
+          SET status = 'queued', override = 1, attempts = 0, claimed_at = NULL, moderation_reason = NULL
+        WHERE id = ?`
+    )
+      .bind(id)
+      .run();
+  }
+}
+
+/** Remove any derivative(s) for a submission (R2 objects + rows) before regenerating. */
+export async function deleteDerivativesForSubmission(env: Env, submissionId: string): Promise<void> {
+  const r = await env.DB.prepare(`SELECT r2_key FROM derivatives WHERE submission_id = ?`)
+    .bind(submissionId)
+    .all<{ r2_key: string }>();
+  for (const row of r.results ?? []) {
+    try {
+      await env.BUCKET.delete(row.r2_key);
+    } catch {
+      /* best-effort */
+    }
+  }
+  await env.DB.prepare(`DELETE FROM derivatives WHERE submission_id = ?`)
+    .bind(submissionId)
+    .run();
+}
+
+export interface AttentionItem extends Submission {
+  derivative_key: string | null; // the flagged/generated image, if one exists
+}
+
+/** Submissions the curator may need to act on: failed, blocked, or in-flight. */
+export async function listNeedsAttention(env: Env): Promise<AttentionItem[]> {
+  const r = await env.DB.prepare(
+    `SELECT s.*, d.r2_key AS derivative_key
+       FROM submissions s
+       LEFT JOIN derivatives d ON d.submission_id = s.id
+      WHERE s.status IN ('rejected', 'queued', 'generating')
+      ORDER BY s.created_at DESC LIMIT 100`
+  ).all<AttentionItem>();
+  return r.results ?? [];
+}
+
 // ---- Derivatives ----
 
 export async function insertDerivative(
@@ -122,12 +250,4 @@ export async function setSortOrder(env: Env, derivativeId: string, order: number
   await env.DB.prepare(`UPDATE derivatives SET sort_order = ? WHERE id = ?`)
     .bind(order, derivativeId)
     .run();
-}
-
-/** Rejected submissions (for the dashboard's "blocked" view). */
-export async function listRejected(env: Env): Promise<Submission[]> {
-  const r = await env.DB.prepare(
-    `SELECT * FROM submissions WHERE status = 'rejected' ORDER BY created_at DESC LIMIT 100`
-  ).all<Submission>();
-  return r.results ?? [];
 }

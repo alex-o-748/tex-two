@@ -1,7 +1,6 @@
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
-  GEN_QUEUE: Queue<GenJob>;
 
   // Secrets (wrangler secret put ...)
   ANTHROPIC_API_KEY: string;
@@ -11,11 +10,6 @@ export interface Env {
   // Vars
   AUTO_APPROVE: string; // "true" | "false"
   PUBLIC_BASE_URL: string;
-}
-
-/** Message enqueued when a visitor submits a prompt. */
-export interface GenJob {
-  submissionId: string;
 }
 
 export interface Painting {
@@ -43,6 +37,9 @@ export interface Submission {
   contributor_name: string | null;
   status: SubmissionStatus;
   moderation_reason: string | null;
+  attempts: number;
+  claimed_at: number | null;
+  override: number; // 1 = curator override: skip moderation
   created_at: number;
 }
 

@@ -5,25 +5,34 @@ import { imageProvider } from './imageProvider';
 import { bufferToBase64 } from './util';
 
 /**
- * Run the full per-submission pipeline:
+ * Run the full per-submission pipeline for an already-CLAIMED submission
+ * (status `generating`, set atomically by db.claimSubmission):
  *   moderate text -> craft edit instruction -> edit the original ->
- *   moderate the output image -> store derivative -> set status.
+ *   store derivative -> moderate the output image -> set status.
  *
- * Throws on transient/infrastructure failure so the queue can retry.
- * "Content rejected" is a normal terminal outcome (not an error).
+ * The derivative is stored BEFORE image moderation, so a flagged image is kept
+ * and the curator can preview + override it. If the submission's `override` flag
+ * is set, both moderation steps are skipped entirely.
+ *
+ * Throws on transient/infrastructure failure so the caller can mark it failed /
+ * let the cron backstop retry. "Content rejected" is a normal terminal outcome.
  */
 export async function processSubmission(env: Env, submissionId: string): Promise<void> {
   const sub = await db.getSubmission(env, submissionId);
   if (!sub) return;
-  if (sub.status !== 'queued') return; // already handled (e.g. a retry after success)
+  const skipModeration = sub.override === 1;
 
-  await db.setSubmissionStatus(env, sub.id, 'generating');
+  // Fresh generation: clear any prior derivative for this submission (retry /
+  // override-regenerate) so we never leave a duplicate image behind.
+  await db.deleteDerivativesForSubmission(env, sub.id);
 
-  // 1. Moderate the audience text.
-  const textCheck = await moderateText(env, sub.prompt_text);
-  if (!textCheck.allowed) {
-    await db.setSubmissionStatus(env, sub.id, 'rejected', textCheck.reason || 'prompt blocked');
-    return;
+  // 1. Moderate the audience text (unless the curator overrode).
+  if (!skipModeration) {
+    const textCheck = await moderateText(env, sub.prompt_text);
+    if (!textCheck.allowed) {
+      await db.setSubmissionStatus(env, sub.id, 'rejected', textCheck.reason || 'prompt blocked');
+      return;
+    }
   }
 
   const painting = await db.getPainting(env, sub.painting_id);
@@ -52,17 +61,7 @@ export async function processSubmission(env: Env, submissionId: string): Promise
     instruction,
   });
 
-  // 4. Moderate the generated image.
-  const imgCheck = await moderateImage(env, {
-    imageBase64: bufferToBase64(edited.bytes),
-    mediaType: edited.mediaType,
-  });
-  if (!imgCheck.allowed) {
-    await db.setSubmissionStatus(env, sub.id, 'rejected', imgCheck.reason || 'image blocked');
-    return;
-  }
-
-  // 5. Store the derivative and record it.
+  // 4. Store the derivative FIRST — a flagged image stays available for override.
   const derivativeId = crypto.randomUUID();
   const key = `derivatives/${derivativeId}.png`;
   await env.BUCKET.put(key, edited.bytes, {
@@ -76,6 +75,18 @@ export async function processSubmission(env: Env, submissionId: string): Promise
     media_type: edited.mediaType,
     crafted_prompt: instruction,
   });
+
+  // 5. Moderate the generated image (unless overridden). The image is kept either way.
+  if (!skipModeration) {
+    const imgCheck = await moderateImage(env, {
+      imageBase64: bufferToBase64(edited.bytes),
+      mediaType: edited.mediaType,
+    });
+    if (!imgCheck.allowed) {
+      await db.setSubmissionStatus(env, sub.id, 'rejected', imgCheck.reason || 'image blocked');
+      return;
+    }
+  }
 
   // 6. Hybrid gate.
   const autoApprove = env.AUTO_APPROVE !== 'false';
