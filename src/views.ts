@@ -134,7 +134,6 @@ export function showPage(): string {
   #caption .q { font-size: 30px; line-height: 1.3; margin: 0; color: #fff;
     text-shadow: 0 2px 12px rgba(0,0,0,.7); font-family: Georgia, serif; font-style: italic; }
   #caption .who { margin-top: 10px; font-size: 16px; color: #e8b06a; letter-spacing: .04em; }
-  #caption .ts { margin-top: 6px; font-size: 13px; color: #8a857c; letter-spacing: .04em; }
   #empty { position: fixed; inset: 0; display: grid; place-items: center;
     color: #555; font-size: 20px; font-family: Georgia, serif; }
 </style>
@@ -171,12 +170,6 @@ export function showPage(): string {
     } catch (e) { /* keep showing what we have */ }
   }
 
-  function fmtTime(ts) {
-    if (!ts) return '';
-    try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-    catch (e) { return ''; }
-  }
-
   function show(item) {
     empty.style.display = 'none';
     const slide = document.createElement('div');
@@ -184,10 +177,8 @@ export function showPage(): string {
     slide.style.backgroundImage = 'url("/img/' + item.derivative_key + '")';
     stage.appendChild(slide);
     requestAnimationFrame(() => requestAnimationFrame(() => slide.classList.add('on')));
-    const when = fmtTime(item.created_at);
     cap.innerHTML = '<p class="q">&ldquo;' + escapeHtml(item.prompt_text) + '&rdquo;</p>' +
-      (item.contributor_name ? '<div class="who">&mdash; ' + escapeHtml(item.contributor_name) + '</div>' : '') +
-      (when ? '<div class="ts">generated ' + escapeHtml(when) + '</div>' : '');
+      (item.contributor_name ? '<div class="who">&mdash; ' + escapeHtml(item.contributor_name) + '</div>' : '');
     cap.classList.add('on');
     const prev = current;
     current = slide;
