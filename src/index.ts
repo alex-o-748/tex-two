@@ -11,6 +11,20 @@ import { submitPage, confirmationPage, showPage, curatePage } from './views';
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Surface backend failures instead of an opaque 500. Everything under
+// /api/curate/* is behind basic auth (curator-only), so it's safe to return the
+// real error text there — this is what turns a silent "Approve anyway" failure
+// (e.g. a DB missing a migration) into a diagnosable message. The error is also
+// logged so it shows up in Workers observability.
+app.onError((err, c) => {
+  console.error(`${c.req.method} ${c.req.path} failed:`, err);
+  const message = err instanceof Error ? err.message : String(err);
+  if (c.req.path.startsWith('/api/')) {
+    return c.json({ error: message }, 500);
+  }
+  return c.text('Internal Server Error', 500);
+});
+
 /**
  * Claim a submission and run the generation pipeline. Used both by the submit
  * request's fast-path (ctx.waitUntil) and by the cron backstop. The atomic claim
