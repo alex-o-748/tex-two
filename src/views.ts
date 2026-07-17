@@ -251,13 +251,14 @@ export function curatePage(): string {
 </header>
 
 <section class="panel">
-  <h2>Add a drawing</h2>
+  <h2>Add drawings</h2>
   <form id="upload">
-    <input name="title" placeholder="Drawing title" required>
-    <input type="file" name="image" accept="image/png,image/jpeg" required>
+    <input name="title" id="uptitle" placeholder="Title (optional &mdash; filename used if blank)">
+    <input type="file" name="image" id="upfiles" accept="image/png,image/jpeg" multiple required>
     <button type="submit">Upload &amp; analyze</button>
     <span id="upstatus"></span>
   </form>
+  <p class="hint drop">Pick one or many &mdash; each image is titled from its filename and auto-described.</p>
   <div id="drawings" class="grid"></div>
 </section>
 
@@ -282,6 +283,7 @@ export function curatePage(): string {
   input, button { background: #17151d; color: #ece9e4; border: 1px solid #2f2c38; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
   button { background: #e8b06a; color: #1a1206; border: 0; font-weight: 600; }
   #upstatus { color: #8a857c; font-size: 13px; }
+  .hint.drop { color: #6c675f; font-size: 12px; margin: -6px 0 16px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
   .card { background: #131218; border: 1px solid #26232e; border-radius: 12px; overflow: hidden; }
   .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #000; }
@@ -312,17 +314,64 @@ export function curatePage(): string {
 async function j(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r.json(); }
 
 const upForm = document.getElementById('upload');
+
+// Turn a filename into a human title: strip the extension, swap _/- for spaces.
+function titleFromFile(name) {
+  return name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Untitled';
+}
+
 upForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const status = document.getElementById('upstatus');
-  status.textContent = 'uploading & analyzing…';
-  try {
-    const fd = new FormData(upForm);
-    await j('/api/curate/upload', { method: 'POST', body: fd });
-    upForm.reset();
-    status.textContent = 'done';
-    load();
-  } catch (err) { status.textContent = 'error: ' + err.message; }
+  const fileInput = document.getElementById('upfiles');
+  const titleInput = document.getElementById('uptitle');
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) return;
+
+  const btn = upForm.querySelector('button');
+  btn.disabled = true;
+  const total = files.length;
+  let done = 0, failed = 0;
+
+  // A single file honors an explicit title; a batch titles each from its filename.
+  const titleFor = (file) =>
+    (total === 1 && titleInput.value.trim()) ? titleInput.value.trim() : titleFromFile(file.name);
+
+  const report = () => {
+    status.textContent = 'analyzing… ' + done + '/' + total + (failed ? ' · ' + failed + ' failed' : '');
+  };
+  report();
+
+  const uploadOne = async (file) => {
+    const fd = new FormData();
+    fd.append('title', titleFor(file));
+    fd.append('image', file);
+    try {
+      await j('/api/curate/upload', { method: 'POST', body: fd });
+    } catch (err) {
+      failed++;
+      console.error('upload failed for', file.name, err);
+    } finally {
+      done++;
+      report();
+      load();
+    }
+  };
+
+  // Small concurrency pool: a few Claude describe calls in flight at once, never
+  // hundreds — keeps within the Worker's subrequest budget and the API rate limit.
+  const queue = files.slice();
+  const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+    while (queue.length) await uploadOne(queue.shift());
+  });
+  await Promise.all(workers);
+
+  status.textContent = failed
+    ? 'done · ' + (total - failed) + ' added, ' + failed + ' failed'
+    : 'done · ' + total + ' added';
+  upForm.reset();
+  btn.disabled = false;
+  load();
 });
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }

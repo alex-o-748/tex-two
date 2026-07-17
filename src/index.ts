@@ -172,11 +172,18 @@ app.get('/api/curate/state', async (c) => {
   return c.json({ drawings: withQr, derivatives, needs_attention: needsAttention });
 });
 
+// Add a drawing. Handles one image per request; the curator dashboard fans a
+// multi-file selection out into one call per image (each runs its own Claude
+// describe, so batching them server-side would blow the Worker's CPU/subrequest
+// budget). The title defaults to the client-supplied filename-derived name.
 app.post('/api/curate/upload', async (c) => {
   const body = await c.req.parseBody();
   const title = String(body.title ?? '').trim().slice(0, 120) || 'Untitled';
   const file = body.image;
   if (!(file instanceof File)) return c.json({ error: 'no image' }, 400);
+  if (!/^image\/(png|jpe?g)$/.test(file.type)) {
+    return c.json({ error: 'unsupported image type (use PNG or JPEG)' }, 400);
+  }
 
   const mediaType = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
   const ext = mediaType === 'image/jpeg' ? 'jpg' : 'png';
