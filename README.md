@@ -7,8 +7,9 @@ derivatives are projected back into the room as a live slideshow.
   idea transforms the **original drawing**; hint chips suggest what to ask.
 - **Wall** (`/show`) — full-screen crossfade slideshow of approved derivatives,
   captioned with the prompt + contributor. Stays live by polling `/api/feed`.
-- **Curator** (`/curate`, password-protected) — upload drawings (auto-described by
-  Claude, QR placard rendered), and approve / hide / feature derivatives.
+- **Curator** (`/curate`, password-protected) — upload drawings one or many at a time
+  (each auto-described by Claude, titled from its filename, QR placard rendered), and
+  approve / hide / feature derivatives.
 
 > The auto-generated **description** and **style** seed every edit instruction
 > (`craftEditInstruction`), so they shape *all* derivatives of a painting. If they're
