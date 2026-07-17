@@ -1,4 +1,4 @@
-# tex-two — Interactive Art Installation
+# tex-two — Interactive Art Installation 
 
 Audience members reshape hung drawings from their phones; the AI-transformed
 derivatives are projected back into the room as a live slideshow.
