@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { basicAuth } from 'hono/basic-auth';
+import { HTTPException } from 'hono/http-exception';
 import QRCode from 'qrcode';
 
 import type { Env } from './types';
@@ -17,6 +18,14 @@ const app = new Hono<{ Bindings: Env }>();
 // (e.g. a DB missing a migration) into a diagnosable message. The error is also
 // logged so it shows up in Workers observability.
 app.onError((err, c) => {
+  // HTTPExceptions are deliberate control flow, not backend failures — most
+  // importantly basicAuth throws a 401 (with its WWW-Authenticate challenge) to
+  // ask the browser for credentials. Return that response as-is; rewriting it to
+  // 500 (as the catch-all below would) swallows the auth prompt and makes
+  // /curate look broken. Don't log these as errors.
+  if (err instanceof HTTPException) {
+    return err.getResponse();
+  }
   console.error(`${c.req.method} ${c.req.path} failed:`, err);
   const message = err instanceof Error ? err.message : String(err);
   if (c.req.path.startsWith('/api/')) {
