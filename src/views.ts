@@ -46,7 +46,7 @@ export function submitPage(drawing: Drawing, error = ''): string {
 <main class="wrap">
   <figure>
     <img src="${imgUrl}" alt="${escapeHtml(drawing.title)}">
-    <figcaption>${escapeHtml(drawing.title)}</figcaption>
+    <figcaption>Drawing by Anna Bessonova</figcaption>
   </figure>
   ${errorBanner}
   <h1>Reshape this drawing</h1>
