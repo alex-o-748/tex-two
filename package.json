@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "db:migrate": "wrangler d1 migrations apply tex-two-db --remote",
-    "db:migrate:local": "wrangler d1 migrations apply tex-two-db --local"
+    "db:migrate:local": "wrangler d1 migrations apply tex-two-db --local",
+    "export-qr": "node scripts/export-qr.mjs"
   },
   "dependencies": {
     "hono": "^4.6.14",

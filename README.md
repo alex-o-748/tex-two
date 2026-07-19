@@ -82,6 +82,32 @@ After deploy, set `PUBLIC_BASE_URL` to the Worker's public origin (e.g.
 at the right place. Flip `AUTO_APPROVE` to `"false"` if you want every derivative
 to wait for artist approval before it reaches the wall.
 
+## Printing the QR placards
+
+The `/curate` dashboard shows a live QR per painting, but to print them all at
+once export them to a folder:
+
+```sh
+# Set PUBLIC_BASE_URL in wrangler.jsonc first (the origin the codes point at).
+npm run export-qr                 # pulls drawings from the remote D1
+```
+
+This writes one image per drawing to `qr-codes/` — each an SVG with the QR code
+above a dashed cut-line and the drawing's **title** printed below, so you can
+tell the codes apart while placing them, then trim the label off. It also writes
+`qr-codes/print.html`, a contact sheet that lays every placard out for printing
+the whole set in one go. Uses the `qrcode` dependency already in the project —
+no extra installs — and encodes the same `PUBLIC_BASE_URL/p/:id` URL as `/curate`.
+
+Options:
+
+```sh
+node scripts/export-qr.mjs --local                 # pull from the local dev D1
+node scripts/export-qr.mjs --base https://…        # override the base URL
+node scripts/export-qr.mjs --out placards          # output folder (default qr-codes)
+node scripts/export-qr.mjs --input drawings.json   # skip wrangler; read a JSON file
+```
+
 ## Config
 
 | Var / secret | Purpose |
