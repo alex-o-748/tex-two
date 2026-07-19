@@ -178,9 +178,12 @@ async function placardSvg(url, title) {
   const pad = 40; // white quiet zone / page margin
   const lineH = 40;
   const lines = wrapTitle(title);
-  const labelH = 24 + lines.length * lineH + pad;
+  // Dashed cut-line sits a full `pad` below the QR — the same white band it has
+  // above — so once the title is trimmed off the code is vertically centered.
+  const cutY = pad + size + pad;
+  const labelTop = cutY + 4; // title band, below the cut-line, gets trimmed away
   const w = size + pad * 2;
-  const h = pad + size + labelH;
+  const h = labelTop + lines.length * lineH + pad;
 
   const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
   const count = qr.modules.size;
@@ -199,7 +202,6 @@ async function placardSvg(url, title) {
     }
   }
 
-  const labelTop = pad + size + 24;
   const text = lines
     .map(
       (ln, i) =>
@@ -210,7 +212,7 @@ async function placardSvg(url, title) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
 <rect width="${w}" height="${h}" fill="#fff"/>
 <g fill="#000">${rects}</g>
-<line x1="${pad}" y1="${pad + size + 20}" x2="${w - pad}" y2="${pad + size + 20}" stroke="#ccc" stroke-width="1" stroke-dasharray="6 6"/>
+<line x1="${pad}" y1="${cutY}" x2="${w - pad}" y2="${cutY}" stroke="#ccc" stroke-width="1" stroke-dasharray="6 6"/>
 ${text}
 </svg>`;
 }
