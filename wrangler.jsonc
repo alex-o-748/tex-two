@@ -19,7 +19,7 @@
     "AUTO_APPROVE": "true",
     // Public origin the QR codes point at, e.g. https://tex-two.<subdomain>.workers.dev
     // Leave "" in dev; set it before printing placards.
-    "PUBLIC_BASE_URL": ""
+    "PUBLIC_BASE_URL": "https://tex-two.alaexis.workers.dev/"
   },
   "d1_databases": [
     {
