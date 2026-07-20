@@ -9,7 +9,7 @@ function layout(title: string, body: string, head = ''): string {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${escapeHtml(title)}</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark; --serif: Georgia, serif; }
   * { box-sizing: border-box; }
   body {
     margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -78,11 +78,12 @@ export function submitPage(drawing: Drawing, error = ''): string {
   .wrap { max-width: 560px; margin: 0 auto; padding: 20px 18px 48px; }
   figure { margin: 0 0 20px; }
   figure img { width: 100%; border-radius: 14px; display: block; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
-  figcaption { margin-top: 10px; color: #a8a29a; font-size: 14px; letter-spacing: .02em; }
+  figcaption { margin-top: 10px; color: #a8a29a; font-size: 14px; letter-spacing: .02em;
+    font-family: var(--serif); font-style: italic; }
   .error { background: #3a1717; color: #e88a8a; border: 1px solid #5a2626; border-radius: 12px;
     padding: 12px 14px; margin: 0 0 16px; font-size: 14px; }
-  h1 { font-size: 26px; margin: 8px 0 6px; }
-  .lede { color: #b7b2aa; margin: 0 0 18px; line-height: 1.5; }
+  h1 { font-size: 26px; margin: 8px 0 6px; font-family: var(--serif); }
+  .lede { color: #b7b2aa; margin: 0 0 18px; line-height: 1.5; font-family: var(--serif); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .chip {
     background: #1c1a22; color: #d9d4cc; border: 1px solid #2f2c38;
@@ -140,8 +141,8 @@ export function confirmationPage(drawing: Drawing, mode: 'prompt' | 'upload' = '
   .wrap { max-width: 520px; margin: 0 auto; padding: 64px 20px; text-align: center; }
   .card { background: #131218; border: 1px solid #2f2c38; border-radius: 18px; padding: 40px 28px; }
   .spark { font-size: 48px; color: #e8b06a; }
-  h1 { font-size: 24px; margin: 12px 0; }
-  p { color: #b7b2aa; line-height: 1.6; }
+  h1 { font-size: 24px; margin: 12px 0; font-family: var(--serif); }
+  p { color: #b7b2aa; line-height: 1.6; font-family: var(--serif); }
   .again { display: inline-block; margin-top: 20px; color: #e8b06a; text-decoration: none; font-weight: 600; }
 </style>`;
   return layout('Sent', body);
@@ -167,10 +168,10 @@ export function showPage(): string {
   }
   #caption.on { opacity: 1; }
   #caption .q { font-size: 30px; line-height: 1.3; margin: 0; color: #fff;
-    text-shadow: 0 2px 12px rgba(0,0,0,.7); font-family: Georgia, serif; font-style: italic; }
+    text-shadow: 0 2px 12px rgba(0,0,0,.7); font-family: var(--serif); font-style: italic; }
   #caption .who { margin-top: 10px; font-size: 16px; color: #e8b06a; letter-spacing: .04em; }
   #empty { position: fixed; inset: 0; display: grid; place-items: center;
-    color: #555; font-size: 20px; font-family: Georgia, serif; }
+    color: #555; font-size: 20px; font-family: var(--serif); }
 </style>
 <script>
 (function () {
