@@ -301,7 +301,7 @@ export function curatePage(): string {
   .actions button { font-size: 12px; padding: 6px 10px; background: #23202b; color: #d9d4cc; border: 1px solid #34313d; }
   .actions button.on { background: #e8b06a; color: #1a1206; border: 0; }
   .qr { padding: 10px 12px; border-top: 1px solid #26232e; }
-  .qr svg { width: 96px; height: 96px; background: #fff; border-radius: 6px; }
+  .qr svg { width: 48px; height: 48px; background: #fff; border-radius: 6px; }
   .qr a { font-size: 12px; display: block; margin-top: 6px; word-break: break-all; }
   .card.att .badge { margin-top: 0; margin-bottom: 8px; }
   .card.att .q { margin-top: 4px; }

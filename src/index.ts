@@ -172,7 +172,7 @@ app.get('/api/curate/state', async (c) => {
   const withQr = await Promise.all(
     drawings.map(async (p) => {
       const submitUrl = `${base}/p/${p.id}`;
-      const qr = await QRCode.toString(submitUrl, { type: 'svg', margin: 1, width: 96 });
+      const qr = await QRCode.toString(submitUrl, { type: 'svg', margin: 1, width: 48 });
       return { ...p, submit_url: submitUrl, qr };
     })
   );
