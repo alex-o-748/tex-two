@@ -393,6 +393,8 @@ async function load() {
           <input id="style-\${p.id}" value="\${esc(p.style_notes || '')}"></label>
         <div class="actions">
           <button class="on" onclick="savePainting('\${p.id}')">Save</button>
+          <input type="file" id="reimg-\${p.id}" accept="image/png,image/jpeg" hidden onchange="replaceImage('\${p.id}', this)">
+          <button onclick="document.getElementById('reimg-\${p.id}').click()">Replace image</button>
           <span class="sub" id="pstatus-\${p.id}"></span>
         </div>
       </div>
@@ -447,6 +449,23 @@ window.savePainting = async (id) => {
     status.textContent = 'saved · new submissions use this';
     document.activeElement && document.activeElement.blur();
   } catch (err) { status.textContent = 'error: ' + err.message; }
+};
+window.replaceImage = async (id, input) => {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const status = document.getElementById('pstatus-' + id);
+  status.textContent = 'replacing image…';
+  const fd = new FormData();
+  fd.append('image', file);
+  try {
+    await j('/api/curate/painting/' + id + '/image', { method: 'POST', body: fd });
+    status.textContent = 'image replaced';
+    load();
+  } catch (err) {
+    status.textContent = 'error: ' + err.message;
+  } finally {
+    input.value = '';
+  }
 };
 window.act = async (submissionId, action) => { await j('/api/curate/submission/' + submissionId + '/' + action, { method: 'POST' }); load(); };
 window.feature = async (derivativeId, on) => { await j('/api/curate/derivative/' + derivativeId + '/feature', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ featured: !!on }) }); load(); };

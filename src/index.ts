@@ -245,6 +245,45 @@ app.post('/api/curate/painting/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// Replace a painting's original image with a higher-quality re-upload. Keeps the
+// same drawing (id, title, description, style_notes) — only the image bytes change,
+// so every future submission transforms the better source. The new bytes go to a
+// fresh R2 key (never the old one: /img/* is served immutable, so reusing the key
+// would keep serving the stale image) and the previous object is deleted after the
+// row swaps over. Existing derivatives were made from the old image and are left
+// as-is. We don't re-run describeDrawing: it's the same artwork, and re-describing
+// would clobber any hand-corrected description/style.
+app.post('/api/curate/painting/:id/image', async (c) => {
+  const id = c.req.param('id');
+  const drawing = await db.getDrawing(c.env, id);
+  if (!drawing) return c.json({ error: 'not found' }, 404);
+
+  const body = await c.req.parseBody();
+  const file = body.image;
+  if (!(file instanceof File)) return c.json({ error: 'no image' }, 400);
+  if (!/^image\/(png|jpe?g)$/.test(file.type)) {
+    return c.json({ error: 'unsupported image type (use PNG or JPEG)' }, 400);
+  }
+
+  const mediaType = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+  const ext = mediaType === 'image/jpeg' ? 'jpg' : 'png';
+  const key = `drawings/${id}-${Date.now()}.${ext}`;
+  const bytes = await file.arrayBuffer();
+
+  await c.env.BUCKET.put(key, bytes, { httpMetadata: { contentType: mediaType } });
+  await db.updateDrawingImage(c.env, id, key, mediaType);
+
+  // Best-effort cleanup of the previous object (only once the row points elsewhere).
+  if (drawing.r2_key !== key) {
+    try {
+      await c.env.BUCKET.delete(drawing.r2_key);
+    } catch (e) {
+      console.error('failed to delete old drawing image', drawing.r2_key, e);
+    }
+  }
+  return c.json({ ok: true, id });
+});
+
 // Approve / hide / retry a submission.
 app.post('/api/curate/submission/:id/:action', async (c) => {
   const id = c.req.param('id');
