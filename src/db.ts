@@ -18,6 +18,24 @@ export async function getDrawing(env: Env, id: string): Promise<Drawing | null> 
   return env.DB.prepare(`SELECT * FROM drawings WHERE id = ?`).bind(id).first<Drawing>();
 }
 
+/**
+ * Point a drawing at a new image (a higher-quality re-upload). Callers write the
+ * new bytes to a fresh R2 key first, then swap the row over here — never reuse the
+ * old key, since /img/* serves with an immutable cache-control and clients would
+ * keep showing the stale image. Title, description and style_notes are untouched:
+ * it's the same artwork, and the curator may have hand-corrected those.
+ */
+export async function updateDrawingImage(
+  env: Env,
+  id: string,
+  r2Key: string,
+  mediaType: string
+): Promise<void> {
+  await env.DB.prepare(`UPDATE drawings SET r2_key = ?, media_type = ? WHERE id = ?`)
+    .bind(r2Key, mediaType, id)
+    .run();
+}
+
 export async function listDrawings(env: Env): Promise<Drawing[]> {
   const r = await env.DB.prepare(`SELECT * FROM drawings ORDER BY created_at ASC`).all<Drawing>();
   return r.results ?? [];
