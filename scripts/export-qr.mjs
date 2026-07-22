@@ -174,7 +174,7 @@ function wrapTitle(title, maxChars = 24, maxLines = 3) {
 
 // One self-contained SVG: quiet-zone-padded QR on top, title band underneath.
 async function placardSvg(url, title) {
-  const size = 640; // QR box (px)
+  const size = 320; // QR box (px)
   const pad = 40; // white quiet zone / page margin
   const lineH = 40;
   const lines = wrapTitle(title);
