@@ -161,6 +161,31 @@ export function showPage(): string {
     background-size: contain; background-position: center; background-repeat: no-repeat;
   }
   .slide.on { opacity: 1; }
+  /* Invitation slide — periodically interrupts the derivatives to tell the room
+     how to take part, and pointing at the drawings on the wall. */
+  .slide.cta {
+    display: grid; place-items: center;
+    background: radial-gradient(circle at 30% 45%, #17130c 0%, #000 70%);
+  }
+  .cta-inner {
+    display: flex; align-items: center; gap: clamp(28px, 6vw, 80px);
+    max-width: 1100px; padding: 0 6vw;
+  }
+  .cta-arrow {
+    font-size: clamp(120px, 22vw, 300px); line-height: 1; color: #e8b06a;
+    text-shadow: 0 0 40px rgba(232,176,106,.35); animation: nudge 1.8s ease-in-out infinite;
+  }
+  @keyframes nudge { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-18px); } }
+  .cta-lead { font-family: var(--serif); font-size: clamp(34px, 5vw, 68px);
+    line-height: 1.15; margin: 0; color: #fff; }
+  .cta-sub { font-family: var(--serif); font-style: italic;
+    font-size: clamp(20px, 2.6vw, 34px); line-height: 1.4; margin: 18px 0 0; color: #cfc8bd; }
+  .cta-sub em { color: #e8b06a; font-style: italic; }
+  @media (max-aspect-ratio: 1/1) {
+    .cta-inner { flex-direction: column; text-align: center; gap: 12px; }
+    .cta-arrow { animation-name: nudge-up; }
+  }
+  @keyframes nudge-up { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
   #caption {
     position: fixed; left: 0; right: 0; bottom: 0; padding: 26px 40px;
     background: linear-gradient(transparent, rgba(0,0,0,.82));
@@ -178,10 +203,10 @@ export function showPage(): string {
   const stage = document.getElementById('stage');
   const cap = document.getElementById('caption');
   const empty = document.getElementById('empty');
-  const HOLD = 8000, POLL = 5000;
+  const HOLD = 8000, POLL = 5000, CTA_EVERY = 3;
   // One projector, all approved derivatives together: pool holds every item;
   // queue is a shuffled play order that reshuffles each time it's exhausted.
-  let pool = [], queue = [], current = null;
+  let pool = [], queue = [], current = null, sinceCta = 0;
 
   function idsOf(items) { return items.map((x) => x.id).sort().join(','); }
 
@@ -206,28 +231,51 @@ export function showPage(): string {
     } catch (e) { /* keep showing what we have */ }
   }
 
-  function show(item) {
+  // Crossfade a freshly-built slide in and retire the previous one.
+  function present(slide) {
     empty.style.display = 'none';
-    const slide = document.createElement('div');
-    slide.className = 'slide';
-    slide.style.backgroundImage = 'url("/img/' + item.derivative_key + '")';
     stage.appendChild(slide);
     requestAnimationFrame(() => requestAnimationFrame(() => slide.classList.add('on')));
-    cap.innerHTML = '<p class="q">&ldquo;' + escapeHtml(item.prompt_text) + '&rdquo;</p>' +
-      (item.contributor_name ? '<div class="who">&mdash; ' + escapeHtml(item.contributor_name) + '</div>' : '');
-    cap.classList.add('on');
     const prev = current;
     current = slide;
     if (prev) setTimeout(() => prev.remove(), 1500);
   }
 
+  function show(item) {
+    const slide = document.createElement('div');
+    slide.className = 'slide';
+    slide.style.backgroundImage = 'url("/img/' + item.derivative_key + '")';
+    cap.innerHTML = '<p class="q">&ldquo;' + escapeHtml(item.prompt_text) + '&rdquo;</p>' +
+      (item.contributor_name ? '<div class="who">&mdash; ' + escapeHtml(item.contributor_name) + '</div>' : '');
+    cap.classList.add('on');
+    present(slide);
+  }
+
+  // The invitation: how to add your own work to the show. Arrow points toward
+  // the drawings on the wall.
+  function showCta() {
+    const slide = document.createElement('div');
+    slide.className = 'slide cta';
+    slide.innerHTML =
+      '<div class="cta-inner">' +
+        '<div class="cta-arrow">&larr;</div>' +
+        '<div>' +
+          '<p class="cta-lead">Add your work to the show</p>' +
+          '<p class="cta-sub">Scan the code beside any drawing, ' +
+            'and continue it &mdash; <em>your version enters the room</em>.</p>' +
+        '</div>' +
+      '</div>';
+    cap.classList.remove('on');
+    present(slide);
+  }
+
   function tick() {
-    if (pool.length === 0) {
-      empty.style.display = 'grid';
-      cap.classList.remove('on');
-      return;
-    }
+    // Nothing generated yet: keep the invitation on the wall the whole time.
+    if (pool.length === 0) { showCta(); return; }
+    // Slip the invitation in after every few derivatives.
+    if (sinceCta >= CTA_EVERY) { sinceCta = 0; showCta(); return; }
     if (queue.length === 0) queue = shuffle(pool);
+    sinceCta++;
     show(queue.shift());
   }
 
